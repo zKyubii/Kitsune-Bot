@@ -51,16 +51,42 @@ def _font(size: int, bold: bool = True):
     return f if f else ImageFont.load_default()
 
 
-def _font_emoji(size: int):
-    f = _carica(_FONT_EMOJI, size)
-    if f is None:
-        # Noto Color Emoji su Linux ha una sola dimensione bitmap (109px)
-        for p in _FONT_EMOJI:
+_EMOJI_FONT_CACHE = "__non_caricato__"
+
+
+def _emoji_font():
+    """Font emoji a dimensione 'nativa' per il rendering (poi scaliamo l'immagine)."""
+    global _EMOJI_FONT_CACHE
+    if _EMOJI_FONT_CACHE != "__non_caricato__":
+        return _EMOJI_FONT_CACHE
+    for p in _FONT_EMOJI:
+        for sz in (137, 136, 128, 109, 96, 64, 48, 32):
             try:
-                return ImageFont.truetype(p, 109)
+                _EMOJI_FONT_CACHE = ImageFont.truetype(p, sz)
+                return _EMOJI_FONT_CACHE
             except Exception:
                 continue
-    return f
+    _EMOJI_FONT_CACHE = None
+    return None
+
+
+def _render_emoji(testo: str, target_h: int):
+    """Disegna le emoji e le ridimensiona all'altezza voluta (fix emoji giganti su Linux)."""
+    ef = _emoji_font()
+    if ef is None:
+        return None
+    larghezza = 170 * max(1, len(testo)) + 60
+    tmp = Image.new("RGBA", (larghezza, 240), (0, 0, 0, 0))
+    try:
+        ImageDraw.Draw(tmp).text((10, 10), testo, font=ef, embedded_color=True)
+    except Exception:
+        return None
+    bbox = tmp.getbbox()
+    if not bbox:
+        return None
+    em = tmp.crop(bbox)
+    scala = target_h / em.height
+    return em.resize((max(1, int(em.width * scala)), target_h), Image.LANCZOS)
 
 
 def _is_emoji(ch: str) -> bool:
@@ -96,37 +122,43 @@ def _segmenta(testo: str):
 
 def _testo_centrato(canvas: Image.Image, cx: int, cy: int, testo: str, size: int,
                     fill, stroke_fill=(0, 0, 0), stroke_width=2, bold=True):
-    """Disegna testo + emoji a colori, centrato orizzontalmente su (cx, cy)."""
+    """Disegna testo + emoji a colori (scalate correttamente), centrato su (cx, cy)."""
     draw = ImageDraw.Draw(canvas)
     normale = _font(size, bold=bold)
-    emoji = _font_emoji(size)
+    target_h = int(size * 0.9)
 
-    segmenti = _segmenta(testo)
-    larghezze = []
+    parti = []  # (tipo, contenuto, larghezza)
     totale = 0
-    for s, e in segmenti:
-        f = emoji if (e and emoji) else normale
-        w = f.getlength(s)
-        larghezze.append(w)
-        totale += w
+    for s, e in _segmenta(testo):
+        if e:
+            img = _render_emoji(s, target_h)
+            if img:
+                parti.append(("emoji", img, img.width))
+                totale += img.width
+        else:
+            w = normale.getlength(s)
+            parti.append(("testo", s, w))
+            totale += w
 
     x = cx - totale / 2
-    for (s, e), w in zip(segmenti, larghezze):
-        if e and emoji:
-            draw.text((x, cy), s, font=emoji, anchor="lm", embedded_color=True)
+    for tipo, cont, w in parti:
+        if tipo == "emoji":
+            canvas.alpha_composite(cont, (int(x), int(cy - cont.height / 2)))
         else:
-            draw.text((x, cy), s, font=normale, anchor="lm", fill=fill,
+            draw.text((x, cy), cont, font=normale, anchor="lm", fill=fill,
                       stroke_width=stroke_width, stroke_fill=stroke_fill)
         x += w
 
 
 def misura_testo_font(testo: str, size: int, bold: bool = True) -> float:
     normale = _font(size, bold=bold)
-    emoji = _font_emoji(size)
+    target_h = int(size * 0.9)
     tot = 0
     for s, e in _segmenta(testo):
-        f = emoji if (e and emoji) else normale
-        tot += f.getlength(s)
+        if e:
+            tot += target_h * max(1, len(s))  # emoji ~ quadrate
+        else:
+            tot += normale.getlength(s)
     return tot
 
 
@@ -299,6 +331,44 @@ def _crea_immagine(av1_bytes: bytes, av2_bytes: bytes, perc: int, name1: str, na
     return buf
 
 
+class PairConfirmView(discord.ui.View):
+    """Richiesta di conferma: l'altra persona deve accettare entro 60 secondi."""
+    def __init__(self, proponente: discord.Member, partner: discord.Member, guild_id: int):
+        super().__init__(timeout=60)
+        self.proponente = proponente
+        self.partner = partner
+        self.guild_id = guild_id
+        self.message = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.partner.id:
+            await interaction.response.send_message(
+                "❌ Solo la persona richiesta può accettare.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Accetta", emoji="💍", style=discord.ButtonStyle.success)
+    async def accetta(self, interaction: discord.Interaction, button: discord.ui.Button):
+        db.add_marriage(self.guild_id, self.proponente.id, self.partner.id, hours=24)
+        for it in self.children:
+            it.disabled = True
+        self.stop()
+        await interaction.response.edit_message(
+            content=f"💍 {self.proponente.mention} e {self.partner.mention} si sono sposati per **24 ore**! 🎉💕",
+            view=self)
+
+    async def on_timeout(self):
+        if self.message:
+            for it in self.children:
+                it.disabled = True
+            try:
+                await self.message.edit(
+                    content=f"⏳ {self.partner.mention} non ha accettato in tempo. Riprovate con `/ship`!",
+                    view=self)
+            except (discord.HTTPException, discord.NotFound):
+                pass
+
+
 class PairView(discord.ui.View):
     def __init__(self, u1: discord.Member, u2: discord.Member, guild_id: int):
         super().__init__(timeout=180)
@@ -314,12 +384,16 @@ class PairView(discord.ui.View):
             )
             return
 
-        db.add_marriage(self.guild_id, self.u1.id, self.u2.id, hours=24)
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
-        await interaction.followup.send(
-            f"💍 {self.u1.mention} e {self.u2.mention} si sono sposati per **24 ore**! 🎉💕"
-        )
+        proponente = interaction.user
+        partner = self.u2 if proponente.id == self.u1.id else self.u1
+
+        # Controlla che il partner accetti entro 60 secondi
+        confirm = PairConfirmView(proponente, partner, self.guild_id)
+        await interaction.response.send_message(
+            content=f"{partner.mention}, **{proponente.display_name}** vuole sposarti! 💍\n"
+                    f"Accetti entro **60 secondi**?",
+            view=confirm)
+        confirm.message = await interaction.original_response()
 
 
 class Fun(commands.Cog):

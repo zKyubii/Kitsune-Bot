@@ -22,12 +22,27 @@ class Logs(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def _send(self, guild: discord.Guild, category: str, event: str, embed: discord.Embed):
+    async def _send(self, guild: discord.Guild, category: str, event: str, embed: discord.Embed,
+                    source_channel_id: int = None):
         if guild is None:
             return
         config = db.get_log_config(guild.id)
         if not logconfig.is_enabled(config, category, event):
             return
+
+        # Canali in blacklist: i loro log vanno nel canale segreto, oppure ignorati
+        bl = config.get("log_blacklist", {})
+        if source_channel_id and source_channel_id in bl.get("channels", []):
+            segreto = bl.get("secret_channel")
+            if segreto:
+                ch = guild.get_channel(segreto)
+                if ch:
+                    try:
+                        await ch.send(embed=embed)
+                    except discord.HTTPException:
+                        pass
+            return  # non finisce nel log normale
+
         ch = guild.get_channel(logconfig.get_channel_id(config, category))
         if ch:
             try:
@@ -57,14 +72,14 @@ class Logs(commands.Cog):
         if message.content:
             e.add_field(name="Contenuto", value=message.content[:1024], inline=False)
         e.set_thumbnail(url=message.author.display_avatar.url)
-        await self._send(message.guild, "message", "delete", e)
+        await self._send(message.guild, "message", "delete", e, source_channel_id=message.channel.id)
 
         if message.attachments:
             fe = discord.Embed(title="📎 File cancellato", color=RED, timestamp=now())
             fe.add_field(name="Autore", value=f"{message.author.mention}", inline=False)
             fe.add_field(name="Canale", value=message.channel.mention, inline=False)
             fe.add_field(name="File", value="\n".join(a.filename for a in message.attachments)[:1024], inline=False)
-            await self._send(message.guild, "file", "delete", fe)
+            await self._send(message.guild, "file", "delete", fe, source_channel_id=message.channel.id)
 
     @commands.Cog.listener()
     async def on_bulk_message_delete(self, messages: list[discord.Message]):
@@ -73,7 +88,8 @@ class Logs(commands.Cog):
         e = discord.Embed(title="🧹 Cancellazione multipla", color=RED, timestamp=now())
         e.add_field(name="Canale", value=messages[0].channel.mention, inline=True)
         e.add_field(name="Messaggi eliminati", value=str(len(messages)), inline=True)
-        await self._send(messages[0].guild, "message", "bulk_delete", e)
+        await self._send(messages[0].guild, "message", "bulk_delete", e,
+                         source_channel_id=messages[0].channel.id)
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
@@ -88,7 +104,7 @@ class Logs(commands.Cog):
         e.add_field(name="Dopo", value=(after.content or "*vuoto*")[:1024], inline=False)
         e.add_field(name="Link", value=f"[Vai al messaggio]({after.jump_url})", inline=False)
         e.set_thumbnail(url=after.author.display_avatar.url)
-        await self._send(after.guild, "message", "edit", e)
+        await self._send(after.guild, "message", "edit", e, source_channel_id=after.channel.id)
 
     # ── MEMBER ────────────────────────────────────────────────────────────────
     @commands.Cog.listener()
@@ -311,7 +327,9 @@ class Logs(commands.Cog):
         e = discord.Embed(title="🔊 Attività vocale", description="\n".join(lines), color=color, timestamp=now())
         e.add_field(name="Membro", value=f"{member.mention} (`{member.id}`)", inline=False)
         e.set_thumbnail(url=member.display_avatar.url)
-        await self._send(guild, "voice", "state", e)
+        canale_voce = (after.channel or before.channel)
+        await self._send(guild, "voice", "state", e,
+                         source_channel_id=canale_voce.id if canale_voce else None)
 
     # ── SERVER ────────────────────────────────────────────────────────────────
     @commands.Cog.listener()

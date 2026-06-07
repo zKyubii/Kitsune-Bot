@@ -139,7 +139,7 @@ class QuoteChannelSelect(discord.ui.ChannelSelect):
         super().__init__(
             placeholder="📂 Scegli il canale dove pubblicare le quote...",
             channel_types=[discord.ChannelType.text],
-            min_values=1, max_values=1, row=0,
+            min_values=1, max_values=1, row=1,
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -153,7 +153,7 @@ class QuoteChannelSelect(discord.ui.ChannelSelect):
 class QuoteResetButton(discord.ui.Button):
     def __init__(self):
         super().__init__(label="Usa il canale del comando", emoji="♻️",
-                         style=discord.ButtonStyle.secondary, row=1)
+                         style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
@@ -161,26 +161,6 @@ class QuoteResetButton(discord.ui.Button):
         db.save_log_config(interaction.guild_id, config)
         new_view = QuoteSettingsView(self.view.author_id, self.view.guild)
         await interaction.response.edit_message(embed=new_view.build_embed(), view=new_view)
-
-
-class OpenQuoteSettingsButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Impostazioni Quote", emoji="💬",
-                         style=discord.ButtonStyle.primary, row=3)
-
-    async def callback(self, interaction: discord.Interaction):
-        view = QuoteSettingsView(self.view.author_id, self.view.guild)
-        await interaction.response.edit_message(embed=view.build_embed(), view=view)
-
-
-class OpenWarnSettingsButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Regole automatiche Warn", emoji="⚠️",
-                         style=discord.ButtonStyle.primary, row=0)
-
-    async def callback(self, interaction: discord.Interaction):
-        view = WarnActionsView(self.view.author_id, self.view.guild)
-        await interaction.response.edit_message(embed=view.build_embed(), view=view)
 
 
 # ── REGOLE AUTO-WARN ──────────────────────────────────────────────────────────
@@ -271,23 +251,6 @@ class RemoveRuleSelect(discord.ui.Select):
         await interaction.response.edit_message(embed=new_view.build_embed(), view=new_view)
 
 
-class FeatureButton(discord.ui.Button):
-    def __init__(self, key: str, label: str, enabled: bool):
-        super().__init__(
-            label=label,
-            style=discord.ButtonStyle.success if enabled else discord.ButtonStyle.danger,
-        )
-        self.key = key
-
-    async def callback(self, interaction: discord.Interaction):
-        config = db.get_log_config(interaction.guild_id)
-        feats = config.setdefault("features", {})
-        feats[self.key] = not feats.get(self.key, True)
-        db.save_log_config(interaction.guild_id, config)
-        new_view = FeaturesView(self.view.author_id, self.view.guild)
-        await interaction.response.edit_message(embed=new_view.build_embed(), view=new_view)
-
-
 # ── VIEW ──────────────────────────────────────────────────────────────────────
 class BaseView(discord.ui.View):
     def __init__(self, author_id: int, guild: discord.Guild):
@@ -310,10 +273,86 @@ class DashboardView(BaseView):
         self.add_item(HomeSelect())
 
 
+class OpenLogBlacklistButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Canali blacklist", emoji="📵", style=discord.ButtonStyle.secondary, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = LogBlacklistView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class BlacklistChannelsSelect(discord.ui.ChannelSelect):
+    def __init__(self, ids):
+        super().__init__(placeholder="Canali esclusi dai log (testuali + vocali)...",
+                         channel_types=[discord.ChannelType.text, discord.ChannelType.voice],
+                         min_values=0, max_values=25, row=0,
+                         default_values=_dv(ids, discord.SelectDefaultValueType.channel))
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("log_blacklist", {})["channels"] = [c.id for c in self.values]
+        db.save_log_config(interaction.guild_id, config)
+        v = LogBlacklistView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class BlacklistSecretSelect(discord.ui.ChannelSelect):
+    def __init__(self):
+        super().__init__(placeholder="🕵️ Canale segreto dove mandare quei log (opzionale)...",
+                         channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("log_blacklist", {})["secret_channel"] = self.values[0].id
+        db.save_log_config(interaction.guild_id, config)
+        v = LogBlacklistView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class BlacklistSecretResetButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Ignora invece di redirigere", emoji="🚫",
+                         style=discord.ButtonStyle.secondary, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("log_blacklist", {})["secret_channel"] = None
+        db.save_log_config(interaction.guild_id, config)
+        v = LogBlacklistView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class LogBlacklistView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        bl = db.get_log_config(guild.id).get("log_blacklist", {})
+        self.add_item(BlacklistChannelsSelect(bl.get("channels", [])))
+        self.add_item(BlacklistSecretSelect())
+        self.add_item(BlacklistSecretResetButton())
+        self.add_item(BackButton("logs"))
+
+    def build_embed(self) -> discord.Embed:
+        bl = db.get_log_config(self.guild.id).get("log_blacklist", {})
+        chans = bl.get("channels", [])
+        secret = bl.get("secret_channel")
+        embed = discord.Embed(
+            title="📵 Canali blacklist (log)",
+            description=("I log dei canali selezionati **non** finiscono nei log normali.\n"
+                         "Se imposti un **canale segreto**, vengono rediretti lì; altrimenti vengono **ignorati**."),
+            color=BLU,
+        )
+        embed.add_field(name="Canali esclusi", value=f"{len(chans)} canali" if chans else "*nessuno*", inline=False)
+        embed.add_field(name="🕵️ Canale segreto",
+                        value=f"<#{secret}>" if secret else "Nessuno (i log vengono ignorati)", inline=False)
+        return embed
+
+
 class LogsMenuView(BaseView):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(author_id, guild)
         self.add_item(LogCategorySelect())
+        self.add_item(OpenLogBlacklistButton())
         self.add_item(BackButton("home"))
 
     def build_embed(self) -> discord.Embed:
@@ -367,24 +406,24 @@ class CategoryView(BaseView):
 class QuoteSettingsView(BaseView):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(author_id, guild)
+        feats = db.get_log_config(guild.id).get("features", {})
+        self.add_item(FeatureToggleButton("quote", feats.get("quote", True)))
         self.add_item(QuoteChannelSelect())
         self.add_item(QuoteResetButton())
         self.add_item(BackButton("features"))
 
     def build_embed(self) -> discord.Embed:
         config = db.get_log_config(self.guild.id)
+        attiva = "🟢 Attiva" if config.get("features", {}).get("quote", True) else "🔴 Disattivata"
         cid = config.get("quote_channel")
-        if cid:
-            dove = f"<#{cid}> (canale fisso)"
-        else:
-            dove = "Nel canale dove viene usato il comando"
+        dove = f"<#{cid}> (canale fisso)" if cid else "Nel canale dove viene usato il comando"
         embed = discord.Embed(
-            title="💬 Impostazioni Quote",
-            description="Scegli dove vengono pubblicate le citazioni generate.",
+            title="💬 Quote",
+            description="Attiva/disattiva la funzione e scegli dove pubblicare le citazioni.",
             color=BLU,
         )
-        embed.add_field(name="📍 Destinazione attuale", value=dove, inline=False)
-        embed.set_footer(text="Imposta un canale fisso, oppure usa il canale del comando")
+        embed.add_field(name="Stato", value=attiva, inline=False)
+        embed.add_field(name="📍 Destinazione", value=dove, inline=False)
         return embed
 
 
@@ -448,7 +487,7 @@ class DMLockButton(discord.ui.Button):
         if guild._incidents_data is None:
             guild._incidents_data = {}
         guild._incidents_data["dms_disabled_until"] = nuovo.isoformat() if nuovo else None
-        new_view = ModerationView(self.view.author_id, guild)
+        new_view = DMLockView(self.view.author_id, guild)
         await interaction.response.edit_message(embed=new_view.build_embed(), view=new_view)
 
 
@@ -472,26 +511,8 @@ class JoinLockButton(discord.ui.Button):
         if guild._incidents_data is None:
             guild._incidents_data = {}
         guild._incidents_data["invites_disabled_until"] = nuovo.isoformat() if nuovo else None
-        new_view = ModerationView(self.view.author_id, guild)
+        new_view = JoinLockView(self.view.author_id, guild)
         await interaction.response.edit_message(embed=new_view.build_embed(), view=new_view)
-
-
-class OpenAntispamButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Antispam", emoji="🚨", style=discord.ButtonStyle.primary, row=0)
-
-    async def callback(self, interaction: discord.Interaction):
-        view = AntispamView(self.view.author_id, self.view.guild)
-        await interaction.response.edit_message(embed=view.build_embed(), view=view)
-
-
-class OpenJailButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Jail", emoji="🔒", style=discord.ButtonStyle.primary, row=0)
-
-    async def callback(self, interaction: discord.Interaction):
-        v = JailView(self.view.author_id, self.view.guild)
-        await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
 class SetupJailButton(discord.ui.Button):
@@ -619,59 +640,86 @@ class JailView(BaseView):
         return embed
 
 
-class OpenAutoroleButton(discord.ui.Button):
+class DMLockView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        self.add_item(DMLockButton(guild.dms_paused()))
+        self.add_item(BackButton("mod"))
+
+    def build_embed(self) -> discord.Embed:
+        stato = "🟢 In pausa" if self.guild.dms_paused() else "🔴 Attivi"
+        embed = discord.Embed(
+            title="🔒 DM Lock",
+            description="Mette in pausa i DM tra i membri del server (durata max 24h, limite di Discord).",
+            color=BLU)
+        embed.add_field(name="Stato", value=stato, inline=False)
+        return embed
+
+
+class JoinLockView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        self.add_item(JoinLockButton(guild.invites_paused()))
+        self.add_item(BackButton("mod"))
+
+    def build_embed(self) -> discord.Embed:
+        stato = "🟢 In pausa" if self.guild.invites_paused() else "🔴 Attivi"
+        embed = discord.Embed(
+            title="🚪 Join Lock",
+            description="Mette in pausa gli inviti: nessuno può entrare (durata max 24h, limite di Discord).",
+            color=BLU)
+        embed.add_field(name="Stato", value=stato, inline=False)
+        return embed
+
+
+class ModSectionSelect(discord.ui.Select):
     def __init__(self):
-        super().__init__(label="Autorole", emoji="🎭", style=discord.ButtonStyle.primary, row=0)
+        options = [
+            discord.SelectOption(label="🚨 Antispam", value="antispam", description="Protezione spam/raid/scam"),
+            discord.SelectOption(label="🔒 Jail", value="jail", description="Sistema di isolamento"),
+            discord.SelectOption(label="⚠️ Regole Warn", value="warn", description="Azioni automatiche sui warn"),
+            discord.SelectOption(label="🎭 Autorole", value="autorole", description="Ruoli automatici all'ingresso"),
+            discord.SelectOption(label="🔑 Permessi", value="permessi", description="Chi può usare warn/jail/lock"),
+            discord.SelectOption(label="🔒 DM Lock", value="dmlock", description="Pausa DM del server"),
+            discord.SelectOption(label="🚪 Join Lock", value="joinlock", description="Pausa inviti del server"),
+        ]
+        super().__init__(placeholder="Scegli cosa configurare...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        v = AutoroleView(self.view.author_id, self.view.guild)
-        await interaction.response.edit_message(embed=v.build_embed(), view=v)
-
-
-class OpenPermissionsButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Permessi", emoji="🔑", style=discord.ButtonStyle.primary, row=1)
-
-    async def callback(self, interaction: discord.Interaction):
-        v = PermissionsView(self.view.author_id, self.view.guild)
-        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+        a, g = self.view.author_id, self.view.guild
+        mappa = {
+            "antispam": AntispamView, "jail": JailView, "warn": WarnActionsView,
+            "autorole": AutoroleView, "permessi": PermissionsView,
+            "dmlock": DMLockView, "joinlock": JoinLockView,
+        }
+        view = mappa[self.values[0]](a, g)
+        await interaction.response.edit_message(embed=view.build_embed(), view=view)
 
 
 class ModerationView(BaseView):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(author_id, guild)
-        self.add_item(OpenWarnSettingsButton())
-        self.add_item(OpenAntispamButton())
-        self.add_item(OpenJailButton())
-        self.add_item(OpenAutoroleButton())
-        self.add_item(OpenPermissionsButton())
-        self.add_item(DMLockButton(guild.dms_paused()))
-        self.add_item(JoinLockButton(guild.invites_paused()))
+        self.add_item(ModSectionSelect())
         self.add_item(BackButton("home"))
 
     def build_embed(self) -> discord.Embed:
         config = db.get_log_config(self.guild.id)
-        regole = config.get("warn_actions", [])
-        if regole:
-            righe = [f"🔸 **{r['count']} warn** → {_desc_azione(r['action'], r['seconds'])}" for r in regole]
-            testo = "\n".join(righe)
-        else:
-            testo = "*Nessuna regola automatica impostata.*"
-
         antispam = "🟢 Attivo" if config.get("antispam", {}).get("enabled") else "🔴 Disattivo"
         dm = "🟢 In pausa" if self.guild.dms_paused() else "🔴 Attivi"
         join = "🟢 In pausa" if self.guild.invites_paused() else "🔴 Attivi"
+        n_regole = len(config.get("warn_actions", []))
 
         embed = discord.Embed(
             title="🛡️ Moderazione",
-            description="Configura le protezioni e le regole automatiche.",
+            description="Seleziona cosa configurare dal menu qui sotto.",
             color=BLU,
         )
-        embed.add_field(name="⚠️ Regole Warn attive", value=testo, inline=False)
-        embed.add_field(name="🚨 Antispam", value=antispam, inline=True)
-        embed.add_field(name="🔒 DM Lock", value=dm, inline=True)
-        embed.add_field(name="🚪 Join Lock", value=join, inline=True)
-        embed.set_footer(text="DM/Inviti in pausa: durata massima 24h (limite di Discord)")
+        embed.add_field(name="Stato rapido", value=(
+            f"🚨 Antispam: {antispam}\n"
+            f"🔒 DM Lock: {dm}\n"
+            f"🚪 Join Lock: {join}\n"
+            f"⚠️ Regole Warn: {n_regole} attive"
+        ), inline=False)
         return embed
 
 
@@ -944,7 +992,7 @@ class SpamCategoryConfigView(BaseView):
 class ConfessionChannelSelect(discord.ui.ChannelSelect):
     def __init__(self):
         super().__init__(placeholder="📢 Canale delle confessioni...",
-                         channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=0)
+                         channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         cfg = db.get_config(interaction.guild_id)
@@ -957,7 +1005,7 @@ class ConfessionChannelSelect(discord.ui.ChannelSelect):
 class ConfessionLogSelect(discord.ui.ChannelSelect):
     def __init__(self):
         super().__init__(placeholder="🕵️ Canale log staff (anti-abuso)...",
-                         channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=1)
+                         channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         cfg = db.get_config(interaction.guild_id)
@@ -967,35 +1015,28 @@ class ConfessionLogSelect(discord.ui.ChannelSelect):
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
-class OpenConfessionSettingsButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Impostazioni Confession", emoji="🤫",
-                         style=discord.ButtonStyle.primary, row=3)
-
-    async def callback(self, interaction: discord.Interaction):
-        v = ConfessionSettingsView(self.view.author_id, self.view.guild)
-        await interaction.response.edit_message(embed=v.build_embed(), view=v)
-
-
 class ConfessionSettingsView(BaseView):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(author_id, guild)
+        feats = db.get_log_config(guild.id).get("features", {})
+        self.add_item(FeatureToggleButton("confession", feats.get("confession", True)))
         self.add_item(ConfessionChannelSelect())
         self.add_item(ConfessionLogSelect())
         self.add_item(BackButton("features"))
 
     def build_embed(self) -> discord.Embed:
         cfg = db.get_config(self.guild.id)
+        attiva = "🟢 Attiva" if db.get_log_config(self.guild.id).get("features", {}).get("confession", True) else "🔴 Disattivata"
         ch = self.guild.get_channel(cfg["confession_channel"]) if cfg and cfg["confession_channel"] else None
         log = self.guild.get_channel(cfg["log_channel"]) if cfg and cfg["log_channel"] else None
         embed = discord.Embed(
-            title="🤫 Impostazioni Confession",
-            description="Imposta dove vengono pubblicate le confessioni anonime e il log staff.",
+            title="🤫 Confession",
+            description="Attiva/disattiva la funzione e imposta i canali delle confessioni anonime.",
             color=BLU,
         )
+        embed.add_field(name="Stato", value=attiva, inline=False)
         embed.add_field(name="📢 Canale confessioni", value=ch.mention if ch else "❌ non impostato", inline=False)
         embed.add_field(name="🕵️ Log staff", value=log.mention if log else "❌ non impostato (opzionale)", inline=False)
-        embed.set_footer(text="Comandi utenti: /confession write e /confession reply")
         return embed
 
 
@@ -1087,30 +1128,71 @@ class PermissionsView(BaseView):
         return embed
 
 
+def _feature_view(key: str, author_id: int, guild: discord.Guild):
+    if key == "quote":
+        return QuoteSettingsView(author_id, guild)
+    if key == "confession":
+        return ConfessionSettingsView(author_id, guild)
+    return FeatureDetailView(author_id, guild, key)
+
+
+class FeatureToggleButton(discord.ui.Button):
+    def __init__(self, key: str, enabled: bool):
+        super().__init__(label="Disattiva" if enabled else "Attiva",
+                         emoji="🟢" if enabled else "🔴",
+                         style=discord.ButtonStyle.success if enabled else discord.ButtonStyle.danger, row=0)
+        self.key = key
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        feats = config.setdefault("features", {})
+        feats[self.key] = not feats.get(self.key, True)
+        db.save_log_config(interaction.guild_id, config)
+        v = _feature_view(self.key, self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class FeatureDetailView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild, key: str):
+        super().__init__(author_id, guild)
+        self.key = key
+        feats = db.get_log_config(guild.id).get("features", {})
+        self.add_item(FeatureToggleButton(key, feats.get(key, True)))
+        self.add_item(BackButton("features"))
+
+    def build_embed(self) -> discord.Embed:
+        feats = db.get_log_config(self.guild.id).get("features", {})
+        stato = "🟢 Attiva" if feats.get(self.key, True) else "🔴 Disattivata"
+        embed = discord.Embed(title=f"🔧 {FEATURES[self.key]}", color=BLU)
+        embed.add_field(name="Stato", value=stato, inline=False)
+        return embed
+
+
+class FeatureSelect(discord.ui.Select):
+    def __init__(self):
+        options = [discord.SelectOption(label=lab, value=k) for k, lab in FEATURES.items()]
+        super().__init__(placeholder="Scegli una funzione da configurare...", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = _feature_view(self.values[0], self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
 class FeaturesView(BaseView):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(author_id, guild)
-        config = db.get_log_config(guild.id)
-        feats = config.get("features", {})
-        for key, label in FEATURES.items():
-            self.add_item(FeatureButton(key, label, feats.get(key, True)))
-        self.add_item(OpenQuoteSettingsButton())
-        self.add_item(OpenConfessionSettingsButton())
-        self.add_item(BackButton())
+        self.add_item(FeatureSelect())
+        self.add_item(BackButton("home"))
 
     def build_embed(self) -> discord.Embed:
-        config = db.get_log_config(self.guild.id)
-        feats = config.get("features", {})
-        righe = [
-            f"{'🟢 Attiva' if feats.get(k, True) else '🔴 Disattivata'} — {lab}"
-            for k, lab in FEATURES.items()
-        ]
+        feats = db.get_log_config(self.guild.id).get("features", {})
+        righe = [f"{'🟢' if feats.get(k, True) else '🔴'} {lab}" for k, lab in FEATURES.items()]
         embed = discord.Embed(
             title="🔧 Funzioni del bot",
-            description="\n".join(righe),
+            description="Seleziona una funzione dal menu per attivarla/disattivarla e configurarla.",
             color=BLU,
         )
-        embed.set_footer(text="Premi un pulsante per attivare/disattivare")
+        embed.add_field(name="Stato", value="\n".join(righe), inline=False)
         return embed
 
 

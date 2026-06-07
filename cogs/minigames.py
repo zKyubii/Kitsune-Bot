@@ -31,11 +31,21 @@ class Minigames(commands.Cog):
         await interaction.response.send_message(f"🎲 Hai lanciato un **d{facce}**: **{risultato}**")
 
     # ── MONETA ────────────────────────────────────────────────────────────────
-    @app_commands.command(name="moneta", description="Lancia una moneta")
+    @app_commands.command(name="moneta", description="Scegli testa o croce, poi lancia la moneta")
+    @app_commands.choices(scelta=[
+        app_commands.Choice(name="Testa 🪙", value="testa"),
+        app_commands.Choice(name="Croce ❌", value="croce"),
+    ])
     @logconfig.feature_check("minigames")
-    async def moneta(self, interaction: discord.Interaction):
-        risultato = random.choice(["Testa 🪙", "Croce ❌"])
-        await interaction.response.send_message(f"La moneta è uscita: **{risultato}**!")
+    async def moneta(self, interaction: discord.Interaction, scelta: app_commands.Choice[str]):
+        risultato = random.choice(["testa", "croce"])
+        nomi = {"testa": "Testa 🪙", "croce": "Croce ❌"}
+        vinto = scelta.value == risultato
+        esito = "🎉 Hai indovinato!" if vinto else "😅 Hai sbagliato!"
+        await interaction.response.send_message(
+            f"Hai scelto **{nomi[scelta.value]}**\n"
+            f"La moneta è uscita: **{nomi[risultato]}**\n{esito}"
+        )
 
     # ── 8BALL ─────────────────────────────────────────────────────────────────
     @app_commands.command(name="8ball", description="Chiedi qualcosa alla palla magica")

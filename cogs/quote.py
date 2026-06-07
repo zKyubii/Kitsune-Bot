@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 import database as db
 import logconfig
-from cogs.fun import _segmenta, _font_emoji
+from cogs.fun import _segmenta, _render_emoji
 
 W, H = 1000, 500
 TRIGGER = ("?quote", "!quote")
@@ -51,38 +51,50 @@ def _make_font(font_key: str, size: int, bold: bool):
     return ImageFont.load_default()
 
 
-def _measure(testo, font, emoji_font):
+def _emoji_h(font):
+    return int(getattr(font, "size", 30) * 0.9)
+
+
+def _measure(testo, font):
+    target_h = _emoji_h(font)
     tot = 0
     for s, e in _segmenta(testo):
-        f = emoji_font if (e and emoji_font) else font
-        tot += f.getlength(s)
+        if e:
+            tot += target_h * max(1, len(s))
+        else:
+            tot += font.getlength(s)
     return tot
 
 
-def _draw_centered(canvas, cx, cy, testo, font, emoji_font, fill):
+def _draw_centered(canvas, cx, cy, testo, font, fill):
     draw = ImageDraw.Draw(canvas)
-    segs = _segmenta(testo)
-    widths, tot = [], 0
-    for s, e in segs:
-        f = emoji_font if (e and emoji_font) else font
-        w = f.getlength(s)
-        widths.append(w)
-        tot += w
-    x = cx - tot / 2
-    for (s, e), w in zip(segs, widths):
-        if e and emoji_font:
-            draw.text((x, cy), s, font=emoji_font, anchor="lm", embedded_color=True)
+    target_h = _emoji_h(font)
+    parti, tot = [], 0
+    for s, e in _segmenta(testo):
+        if e:
+            img = _render_emoji(s, target_h)
+            if img:
+                parti.append(("emoji", img, img.width))
+                tot += img.width
         else:
-            draw.text((x, cy), s, font=font, anchor="lm", fill=fill)
+            w = font.getlength(s)
+            parti.append(("testo", s, w))
+            tot += w
+    x = cx - tot / 2
+    for tipo, cont, w in parti:
+        if tipo == "emoji":
+            canvas.alpha_composite(cont, (int(x), int(cy - cont.height / 2)))
+        else:
+            draw.text((x, cy), cont, font=font, anchor="lm", fill=fill)
         x += w
 
 
-def _wrap(testo, font, emoji_font, max_w):
+def _wrap(testo, font, max_w):
     parole = testo.split()
     righe, cur = [], ""
     for p in parole:
         prova = (cur + " " + p).strip()
-        if _measure(prova, font, emoji_font) <= max_w or not cur:
+        if _measure(prova, font) <= max_w or not cur:
             cur = prova
         else:
             righe.append(cur)
@@ -139,23 +151,22 @@ def genera_quote(av_bytes: bytes, testo: str, nome: str, handle: str, opts: dict
     size = 58
     while size > 22:
         font = _make_font(font_key, size, bold)
-        emoji_font = _font_emoji(size)
-        righe = _wrap(testo, font, emoji_font, max_w)
+        righe = _wrap(testo, font, max_w)
         line_h = int(size * 1.25)
         totale = len(righe) * line_h
-        if totale <= 300 and all(_measure(r, font, emoji_font) <= max_w for r in righe):
+        if totale <= 300 and all(_measure(r, font) <= max_w for r in righe):
             break
         size -= 2
 
     y = int(H * 0.40) - totale // 2
     for r in righe:
-        _draw_centered(canvas, cx, y + line_h // 2, r, font, emoji_font, fg)
+        _draw_centered(canvas, cx, y + line_h // 2, r, font, fg)
         y += line_h
 
     y += 18
-    _draw_centered(canvas, cx, y, f"- {nome}", _make_font(font_key, 30, bold), _font_emoji(30), fg)
+    _draw_centered(canvas, cx, y, f"- {nome}", _make_font(font_key, 30, bold), fg)
     y += 34
-    _draw_centered(canvas, cx, y, handle, _make_font(font_key, 20, False), None, sub)
+    _draw_centered(canvas, cx, y, handle, _make_font(font_key, 20, False), sub)
 
     draw = ImageDraw.Draw(canvas)
     draw.text((W - 14, H - 14), "Kitsune • Quote", fill=wm_col, anchor="rs",
