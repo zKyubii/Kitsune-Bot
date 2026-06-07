@@ -1,0 +1,13 @@
+# Segreti — NON caricare mai
+.env
+
+# Database (contiene i dati del server)
+kitsune.db
+
+# Cache Python
+__pycache__/
+*.pyc
+
+# File temporanei
+*.tmp
+test_*.png

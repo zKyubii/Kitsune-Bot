@@ -1,0 +1,131 @@
+from discord import app_commands
+
+# Definizione di tutte le categorie di log e dei rispettivi eventi.
+# Struttura: chiave -> (etichetta, {evento: descrizione})
+LOG_CATEGORIES = {
+    "message": ("📝 Message", {
+        "delete": "Messaggio cancellato",
+        "bulk_delete": "Cancellazione multipla",
+        "edit": "Messaggio modificato",
+    }),
+    "member": ("👤 Member", {
+        "join_leave": "Entrata / Uscita",
+        "role": "Ruolo aggiunto / rimosso",
+        "ban": "Ban / Unban",
+        "kick": "Kick",
+        "timeout": "Timeout / Untimeout",
+        "nickname": "Cambio nickname",
+        "avatar": "Cambio foto profilo",
+    }),
+    "role": ("🎭 Role", {
+        "create": "Ruolo creato",
+        "delete": "Ruolo eliminato",
+        "update": "Ruolo modificato",
+    }),
+    "channel": ("📁 Channel", {
+        "create": "Canale creato",
+        "delete": "Canale eliminato",
+        "update": "Canale modificato",
+    }),
+    "emoji": ("😀 Emoji", {
+        "create": "Emoji creata",
+        "delete": "Emoji eliminata",
+        "update": "Emoji rinominata",
+    }),
+    "voice": ("🔊 Voice", {
+        "state": "Attività vocale (join/leave/mute/stream)",
+    }),
+    "file": ("📎 File", {
+        "delete": "File cancellato",
+    }),
+    "server": ("🛠️ Server", {
+        "update": "Modifiche al server",
+    }),
+    "actions": ("✨ Actions", {
+        "boost": "Boost del server",
+        "invite": "Invito creato",
+    }),
+}
+
+# Funzioni del bot attivabili/disattivabili dalla dashboard
+FEATURES = {
+    "minigames": "🎮 Minigiochi",
+    "fun": "💘 Fun (ship)",
+    "confession": "🤫 Confession",
+    "quote": "💬 Quote",
+}
+
+
+# ── ANTISPAM ──────────────────────────────────────────────────────────────────
+SPAM_CATEGORIES = {
+    "spam": "Spam",
+    "selfbot": "Spam con selfbot",
+    "mentions": "Spam di menzioni",
+    "links": "Spam di link",
+    "external": "Spam di comandi esterni",
+    "duplicates": "Spam di duplicati",
+    "important": "Spam importante",
+}
+
+SANCTIONS = {
+    "none": "Nessuna (solo cancella)",
+    "warn": "Warn",
+    "timeout": "Timeout",
+    "kick": "Kick",
+    "softban": "Soft Ban",
+    "ban": "Ban",
+}
+
+# Configurazione di default per ogni categoria
+DEFAULT_SPAM = {
+    "spam": {"enabled": True, "sanction": "timeout", "seconds": 600},
+    "selfbot": {"enabled": True, "sanction": "ban", "seconds": 0},
+    "mentions": {"enabled": True, "sanction": "timeout", "seconds": 600},
+    "links": {"enabled": True, "sanction": "timeout", "seconds": 600},
+    "external": {"enabled": True, "sanction": "timeout", "seconds": 300},
+    "duplicates": {"enabled": True, "sanction": "timeout", "seconds": 600},
+    "important": {"enabled": True, "sanction": "kick", "seconds": 0},
+}
+
+
+def categoria_cfg(config: dict, key: str) -> dict:
+    salvato = config.get("antispam", {}).get("categories", {}).get(key, {})
+    return {**DEFAULT_SPAM[key], **salvato}
+
+
+def antispam_attivo(config: dict) -> bool:
+    return config.get("antispam", {}).get("enabled", False)
+
+
+def is_enabled(config: dict, category: str, event: str) -> bool:
+    cat = config.get("logs", {}).get(category)
+    if not cat or not cat.get("channel"):
+        return False
+    return cat.get("events", {}).get(event, False)
+
+
+def get_channel_id(config: dict, category: str):
+    return config.get("logs", {}).get(category, {}).get("channel")
+
+
+def feature_enabled(config: dict, feature: str) -> bool:
+    # Di default tutte le funzioni sono attive
+    return config.get("features", {}).get(feature, True)
+
+
+class FeatureDisabled(app_commands.CheckFailure):
+    """Sollevata quando si usa un comando di una funzione disattivata."""
+    pass
+
+
+def feature_check(feature: str):
+    """Decoratore: blocca il comando se la funzione è disattivata sul server."""
+    import database as db
+
+    async def predicate(interaction):
+        config = db.get_log_config(interaction.guild_id)
+        if not feature_enabled(config, feature):
+            raise FeatureDisabled()
+        return True
+
+    return app_commands.check(predicate)
