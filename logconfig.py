@@ -3,47 +3,55 @@ from discord import app_commands
 # Definizione di tutte le categorie di log e dei rispettivi eventi.
 # Struttura: chiave -> (etichetta, {evento: descrizione})
 LOG_CATEGORIES = {
-    "message": ("📝 Message", {
+    "members": ("👥 Members", {
+        "join": "Entrata membro",
+        "leave": "Uscita membro",
+        "bot": "Bot aggiunto / rimosso",
+        "nickname": "Cambio nickname",
+        "avatar": "Avatar server cambiato",
+        "role_given": "Ruolo assegnato",
+        "role_taken": "Ruolo rimosso",
+    }),
+    "messages": ("📝 Messages", {
         "delete": "Messaggio cancellato",
         "bulk_delete": "Cancellazione multipla",
         "edit": "Messaggio modificato",
+        "attachment": "Allegato cancellato (file/gif/audio)",
+        "thread": "Thread creato / eliminato",
+        "pin": "Messaggio fissato / rimosso",
+        "reaction": "Reazione aggiunta / rimossa",
     }),
-    "member": ("👤 Member", {
-        "join_leave": "Entrata / Uscita",
-        "role": "Ruolo aggiunto / rimosso",
-        "ban": "Ban / Unban",
-        "kick": "Kick",
-        "timeout": "Timeout / Untimeout",
-        "nickname": "Cambio nickname",
-        "avatar": "Cambio foto profilo",
+    "voice": ("🔊 Voice", {
+        "join_leave": "Entrata / Uscita / Spostamento",
+        "mute_deaf": "Muta / Sordina",
+        "stream_video": "Stream / Video",
     }),
-    "role": ("🎭 Role", {
+    "channels": ("📁 Channels", {
+        "create": "Canale creato",
+        "delete": "Canale eliminato",
+        "update": "Canale modificato",
+        "permissions": "Permessi canale modificati",
+        "webhook": "Webhook creato / eliminato / modificato",
+    }),
+    "roles": ("🎭 Roles", {
         "create": "Ruolo creato",
         "delete": "Ruolo eliminato",
         "update": "Ruolo modificato",
     }),
-    "channel": ("📁 Channel", {
-        "create": "Canale creato",
-        "delete": "Canale eliminato",
-        "update": "Canale modificato",
-    }),
-    "emoji": ("😀 Emoji", {
-        "create": "Emoji creata",
-        "delete": "Emoji eliminata",
-        "update": "Emoji rinominata",
-    }),
-    "voice": ("🔊 Voice", {
-        "state": "Attività vocale (join/leave/mute/stream)",
-    }),
-    "file": ("📎 File", {
-        "delete": "File cancellato",
-    }),
     "server": ("🛠️ Server", {
         "update": "Modifiche al server",
+        "boost": "Boost aggiunto / rimosso",
     }),
     "actions": ("✨ Actions", {
-        "boost": "Boost del server",
-        "invite": "Invito creato",
+        "invite_create": "Invito creato",
+        "invite_delete": "Invito eliminato",
+        "emoji": "Emoji creata / eliminata / modificata",
+        "event": "Evento creato / modificato / eliminato",
+    }),
+    "modlogs": ("🛡️ Mod Logs", {
+        "ban": "Ban / Unban",
+        "kick": "Kick",
+        "timeout": "Timeout / Untimeout",
     }),
 }
 

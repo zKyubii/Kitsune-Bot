@@ -6,8 +6,7 @@ import datetime
 import database as db
 import logconfig
 
-GIALLO = 0xFCD34D   # confessioni
-VIOLA = 0x8B5CF6    # risposte
+GIALLO = 0xFCD34D
 
 
 class ConfessionModal(discord.ui.Modal, title="Confessione anonima"):
@@ -27,42 +26,30 @@ class ConfessionModal(discord.ui.Modal, title="Confessione anonima"):
         await self.cog.pubblica_confessione(interaction, self.testo.value)
 
 
-class ReplyModal(discord.ui.Modal, title="Rispondi alla confessione"):
-    testo = discord.ui.TextInput(
-        label="La tua risposta",
-        style=discord.TextStyle.paragraph,
-        placeholder="Scrivi qui... resterà anonima 🤫",
-        max_length=1000,
-        required=True,
-    )
-
-    def __init__(self, cog):
-        super().__init__()
-        self.cog = cog
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await self.cog.pubblica_risposta(interaction, self.testo.value)
-
-
-class ReplyView(discord.ui.View):
-    """View persistente con il pulsante Reply sotto ogni confessione/risposta."""
+class ConfessionPromptView(discord.ui.View):
+    """Pulsante persistente sotto le confessioni per inviarne una nuova."""
     def __init__(self, cog):
         super().__init__(timeout=None)
         self.cog = cog
 
-    @discord.ui.button(label="Reply", emoji="💬", style=discord.ButtonStyle.secondary,
-                       custom_id="confession:reply")
-    async def reply(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Invia una confessione!", emoji="🤫",
+                       style=discord.ButtonStyle.secondary, custom_id="confession:new")
+    async def nuova(self, interaction: discord.Interaction, button: discord.ui.Button):
         config = db.get_log_config(interaction.guild_id)
         if not logconfig.feature_enabled(config, "confession"):
             await interaction.response.send_message("🚫 Le confessioni sono disattivate.", ephemeral=True)
             return
-        await interaction.response.send_modal(ReplyModal(self.cog))
+        cfg = db.get_config(interaction.guild_id)
+        if not cfg or not cfg["confession_channel"]:
+            await interaction.response.send_message("❌ Le confessioni non sono configurate.", ephemeral=True)
+            return
+        await interaction.response.send_modal(ConfessionModal(self.cog))
 
 
 class Confession(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.last_msg = {}  # guild_id -> ultimo messaggio confessione (per spostare il pulsante)
 
     gruppo = app_commands.Group(name="confession", description="Sistema di confessioni anonime")
 
@@ -78,7 +65,6 @@ class Confession(commands.Cog):
         else:
             await interaction.response.send_message(msg, ephemeral=True)
 
-    # ── WRITE ───────────────────────────────────────────────────────────────
     @gruppo.command(name="write", description="Scrivi una confessione anonima")
     @logconfig.feature_check("confession")
     async def write(self, interaction: discord.Interaction):
@@ -91,8 +77,7 @@ class Confession(commands.Cog):
             return
         await interaction.response.send_modal(ConfessionModal(self))
 
-    # ── LOG STAFF ─────────────────────────────────────────────────────────────
-    async def _log(self, guild, numero, testo, autore, tipo):
+    async def _log(self, guild, numero, testo, autore):
         config = db.get_config(guild.id)
         if not config or not config["log_channel"]:
             return
@@ -100,7 +85,7 @@ class Confession(commands.Cog):
         if not log_ch:
             return
         embed = discord.Embed(
-            title=f"🕵️ Log {tipo} #{numero}",
+            title=f"🕵️ Log confessione #{numero}",
             description=testo,
             color=discord.Color.dark_grey(),
             timestamp=datetime.datetime.now(datetime.timezone.utc),
@@ -112,7 +97,6 @@ class Confession(commands.Cog):
         except discord.HTTPException:
             pass
 
-    # ── CONFESSIONE ─────────────────────────────────────────────────────────────
     async def pubblica_confessione(self, interaction: discord.Interaction, testo: str):
         guild = interaction.guild
         config = db.get_config(guild.id)
@@ -124,50 +108,31 @@ class Confession(commands.Cog):
 
         numero = db.next_confession_number(guild.id)
         embed = discord.Embed(
-            title=f"Anonymous Confession (#{numero})",
-            description=f'"{testo}"',
+            title=f"🤫 Confessione #{numero}",
+            description=testo,
             color=GIALLO,
             timestamp=datetime.datetime.now(datetime.timezone.utc),
         )
-        msg = await canale.send(embed=embed, view=ReplyView(self))
-        try:
-            await msg.create_thread(name=f"Confession Replies (#{numero})")
-        except discord.HTTPException:
-            pass
+        embed.set_footer(text="Anonimo")
+
+        # Sposta il pulsante: lo tolgo dalla confessione precedente
+        vecchio = self.last_msg.get(guild.id)
+        if vecchio:
+            try:
+                await vecchio.edit(view=None)
+            except (discord.HTTPException, discord.NotFound):
+                pass
+
+        msg = await canale.send(embed=embed, view=ConfessionPromptView(self))
+        self.last_msg[guild.id] = msg
 
         db.save_confession(guild.id, numero, interaction.user.id, msg.id, testo, None)
-        await self._log(guild, numero, testo, interaction.user, "confessione")
+        await self._log(guild, numero, testo, interaction.user)
         await interaction.response.send_message(
             f"✅ La tua confessione **#{numero}** è stata pubblicata in {canale.mention}!", ephemeral=True)
-
-    # ── RISPOSTA ────────────────────────────────────────────────────────────────
-    async def pubblica_risposta(self, interaction: discord.Interaction, testo: str):
-        # Trova il thread dove pubblicare
-        ch = interaction.channel
-        if isinstance(ch, discord.Thread):
-            thread = ch
-        elif interaction.message and interaction.message.thread:
-            thread = interaction.message.thread
-        else:
-            await interaction.response.send_message(
-                "❌ Non riesco a trovare il thread della confessione.", ephemeral=True)
-            return
-
-        numero = db.next_confession_number(interaction.guild_id)
-        embed = discord.Embed(
-            title=f"Anonymous Reply (#{numero})",
-            description=f'"{testo}"',
-            color=VIOLA,
-            timestamp=datetime.datetime.now(datetime.timezone.utc),
-        )
-        await thread.send(embed=embed, view=ReplyView(self))
-
-        db.save_confession(interaction.guild_id, numero, interaction.user.id, 0, testo, None)
-        await self._log(interaction.guild, numero, testo, interaction.user, "risposta")
-        await interaction.response.send_message("✅ Risposta inviata in anonimo!", ephemeral=True)
 
 
 async def setup(bot):
     cog = Confession(bot)
     await bot.add_cog(cog)
-    bot.add_view(ReplyView(cog))
+    bot.add_view(ConfessionPromptView(cog))
