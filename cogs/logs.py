@@ -23,9 +23,14 @@ def jump(guild_id, channel_id, message_id):
     return f"**[Jump to message](https://discord.com/channels/{guild_id}/{channel_id}/{message_id})**"
 
 
-def _emb(color, title, icon=None):
+def _emb(color, title, first, rest=None, icon=None):
+    """Embed pulito: titolo, prima riga, riga vuota, resto."""
     e = discord.Embed(color=color, timestamp=now())
     e.set_author(name=title, icon_url=icon)
+    desc = str(first)
+    if rest:
+        desc += "\n\n" + "\n".join(rest)
+    e.description = desc
     return e
 
 
@@ -52,13 +57,13 @@ class CopyIdButton(discord.ui.DynamicItem[discord.ui.Button], template=r"copyid:
         return cls(int(match["uid"]))
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_message(f"🆔 User ID:\n```{self.user_id}```", ephemeral=True)
+        await interaction.response.send_message(f"```{self.user_id}```", ephemeral=True)
 
 
 class Logs(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.invite_cache = {}     # guild_id -> {code: uses}
+        self.invite_cache = {}     # guild_id -> {code: {"uses": int, "inviter": user}}
         self.voice_since = {}      # (guild_id, user_id) -> join datetime
 
     async def cog_load(self):
@@ -105,7 +110,17 @@ class Logs(commands.Cog):
             pass
         return None, None
 
-    # ── INVITES (cache to know which invite a member used) ───────────────────
+    async def _changed_by(self, guild, action, target_id):
+        """Restituisce 'mention' di chi ha fatto l'azione, o 'themselves' se è stato l'utente stesso."""
+        actor, _ = await self._actor(guild, action, target_id)
+        if actor is None or actor.id == target_id:
+            return "themselves"
+        return actor.mention
+
+    # ── INVITES (cache to know who used / created an invite) ─────────────────
+    def _snapshot(self, invites):
+        return {i.code: {"uses": i.uses or 0, "inviter": i.inviter} for i in invites}
+
     @commands.Cog.listener()
     async def on_ready(self):
         for guild in self.bot.guilds:
@@ -113,7 +128,7 @@ class Logs(commands.Cog):
 
     async def _cache_invites(self, guild):
         try:
-            self.invite_cache[guild.id] = {i.code: i.uses for i in await guild.invites()}
+            self.invite_cache[guild.id] = self._snapshot(await guild.invites())
         except discord.HTTPException:
             pass
 
@@ -125,10 +140,10 @@ class Logs(commands.Cog):
         old = self.invite_cache.get(guild.id, {})
         used = None
         for inv in new:
-            if (inv.uses or 0) > old.get(inv.code, 0):
+            if (inv.uses or 0) > old.get(inv.code, {}).get("uses", 0):
                 used = inv
                 break
-        self.invite_cache[guild.id] = {i.code: i.uses for i in new}
+        self.invite_cache[guild.id] = self._snapshot(new)
         return used
 
     # ── MEMBERS ──────────────────────────────────────────────────────────────
@@ -137,93 +152,88 @@ class Logs(commands.Cog):
         guild = member.guild
         if member.bot:
             actor, _ = await self._actor(guild, discord.AuditLogAction.bot_add, member.id)
-            e = _emb(GREEN, "🤖 Bot Added", member.display_avatar.url)
-            e.description = f"{member.mention} (`{member.id}`)"
-            if actor:
-                e.add_field(name="Added by", value=actor.mention, inline=False)
+            rest = [f"**Added by:** {actor.mention}"] if actor else []
+            e = _emb(GREEN, "🤖 Bot Added", f"{member.mention} (`{member.id}`)", rest, member.display_avatar.url)
             await self._send(guild, "members", "bot", e, copy_id=member.id)
             return
 
         invite = await self._find_invite(guild)
-        e = _emb(GREEN, "📥 Member Joined", member.display_avatar.url)
-        e.description = f"{member.mention} (`{member.id}`)"
-        e.add_field(name="Account created", value=discord.utils.format_dt(member.created_at, "R"), inline=True)
+        rest = [f"**Account created:** {discord.utils.format_dt(member.created_at, 'R')}"]
         if invite:
             inviter = invite.inviter.mention if invite.inviter else "unknown"
-            e.add_field(name="Invite used", value=f"`{invite.code}` by {inviter}", inline=True)
+            rest.append(f"**Invite used:** `{invite.code}` by {inviter}")
+        e = _emb(GREEN, "📥 Member Joined", f"{member.mention} (`{member.id}`)", rest, member.display_avatar.url)
         await self._send(guild, "members", "join", e, copy_id=member.id)
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         guild = member.guild
         if member.bot:
-            e = _emb(RED, "🤖 Bot Removed", member.display_avatar.url)
-            e.description = f"{member} (`{member.id}`)"
+            e = _emb(RED, "🤖 Bot Removed", f"{member} (`{member.id}`)", icon=member.display_avatar.url)
             await self._send(guild, "members", "bot", e, copy_id=member.id)
             return
 
         actor, reason = await self._actor(guild, discord.AuditLogAction.kick, member.id)
         if actor:
-            e = _emb(RED, "👢 Member Kicked", member.display_avatar.url)
-            e.description = f"{member} (`{member.id}`)"
-            e.add_field(name="Moderator", value=actor.mention, inline=True)
+            rest = [f"**Moderator:** {actor.mention}"]
             if reason:
-                e.add_field(name="Reason", value=reason, inline=True)
+                rest.append(f"**Reason:** {reason}")
+            e = _emb(RED, "👢 Member Kicked", f"{member} (`{member.id}`)", rest, member.display_avatar.url)
             await self._send(guild, "modlogs", "kick", e, copy_id=member.id)
         else:
-            e = _emb(RED, "📤 Member Left", member.display_avatar.url)
-            e.description = f"{member} (`{member.id}`)"
             roles = [r.mention for r in member.roles if r.name != "@everyone"]
-            if roles:
-                e.add_field(name="Roles", value=" ".join(roles)[:1024], inline=False)
+            rest = [f"**Roles:** {' '.join(roles)[:900]}"] if roles else []
+            e = _emb(RED, "📤 Member Left", f"{member} (`{member.id}`)", rest, member.display_avatar.url)
             await self._send(guild, "members", "leave", e, copy_id=member.id)
 
     @commands.Cog.listener()
     async def on_member_ban(self, guild, user):
         actor, reason = await self._actor(guild, discord.AuditLogAction.ban, user.id)
-        e = _emb(RED, "🔨 Member Banned", user.display_avatar.url)
-        e.description = f"{user} (`{user.id}`)"
+        rest = []
         if actor:
-            e.add_field(name="Moderator", value=actor.mention, inline=True)
+            rest.append(f"**Moderator:** {actor.mention}")
         if reason:
-            e.add_field(name="Reason", value=reason, inline=True)
+            rest.append(f"**Reason:** {reason}")
+        e = _emb(RED, "🔨 Member Banned", f"{user} (`{user.id}`)", rest, user.display_avatar.url)
         await self._send(guild, "modlogs", "ban", e, copy_id=user.id)
 
     @commands.Cog.listener()
     async def on_member_unban(self, guild, user):
         actor, _ = await self._actor(guild, discord.AuditLogAction.unban, user.id)
-        e = _emb(GREEN, "✅ Member Unbanned", user.display_avatar.url)
-        e.description = f"{user} (`{user.id}`)"
-        if actor:
-            e.add_field(name="Moderator", value=actor.mention, inline=True)
+        rest = [f"**Moderator:** {actor.mention}"] if actor else []
+        e = _emb(GREEN, "✅ Member Unbanned", f"{user} (`{user.id}`)", rest, user.display_avatar.url)
         await self._send(guild, "modlogs", "ban", e, copy_id=user.id)
 
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
         guild = after.guild
+        icon = after.display_avatar.url
 
         if before.roles != after.roles:
             added = [r for r in after.roles if r not in before.roles]
             removed = [r for r in before.roles if r not in after.roles]
-            actor, _ = await self._actor(guild, discord.AuditLogAction.member_role_update, after.id)
-            by = "themselves (onboarding / channels & roles)" if (actor is None or actor.id == after.id) else actor.mention
+            by = await self._changed_by(guild, discord.AuditLogAction.member_role_update, after.id)
+            if by == "themselves":
+                by = "themselves (onboarding / channels & roles)"
             if added:
-                e = _emb(GREEN, "🎭 Role Given", after.display_avatar.url)
-                e.description = f"{after.mention}\n➕ {' '.join(r.mention for r in added)}\n👮 By: {by}"
+                e = _emb(GREEN, "🎭 Role Given", after.mention,
+                         [f"**Roles:** {' '.join(r.mention for r in added)}", f"**By:** {by}"], icon)
                 await self._send(guild, "members", "role_given", e, copy_id=after.id)
             if removed:
-                e = _emb(RED, "🎭 Role Taken", after.display_avatar.url)
-                e.description = f"{after.mention}\n➖ {' '.join(r.mention for r in removed)}\n👮 By: {by}"
+                e = _emb(RED, "🎭 Role Taken", after.mention,
+                         [f"**Roles:** {' '.join(r.mention for r in removed)}", f"**By:** {by}"], icon)
                 await self._send(guild, "members", "role_taken", e, copy_id=after.id)
 
         if before.nick != after.nick:
-            e = _emb(ORANGE, "🏷️ Nickname Changed", after.display_avatar.url)
-            e.description = f"{after.mention}\n**Before:** {before.nick or '*none*'}\n**After:** {after.nick or '*none*'}"
+            by = await self._changed_by(guild, discord.AuditLogAction.member_update, after.id)
+            e = _emb(ORANGE, "🏷️ Nickname Changed", after.mention,
+                     [f"**Before:** {before.nick or '*none*'}",
+                      f"**After:** {after.nick or '*none*'}",
+                      f"**Changed by:** {by}"], icon)
             await self._send(guild, "members", "nickname", e, copy_id=after.id)
 
         if before.guild_avatar != after.guild_avatar:
-            e = _emb(ORANGE, "🖼️ Server Avatar Changed", after.display_avatar.url)
-            e.description = f"{after.mention}"
+            e = _emb(ORANGE, "🖼️ Server Avatar Changed", after.mention, icon=icon)
             if after.guild_avatar:
                 e.set_thumbnail(url=after.guild_avatar.url)
             await self._send(guild, "members", "avatar", e, copy_id=after.id)
@@ -232,33 +242,41 @@ class Logs(commands.Cog):
         a_to = getattr(after, "timed_out_until", None)
         if b_to != a_to:
             if a_to:
-                e = _emb(GOLD, "⏱️ Timeout Applied", after.display_avatar.url)
-                e.description = f"{after.mention}\nExpires {discord.utils.format_dt(a_to, 'R')}"
+                by = await self._changed_by(guild, discord.AuditLogAction.member_update, after.id)
+                e = _emb(GOLD, "⏱️ Timeout Applied", after.mention,
+                         [f"**Expires:** {discord.utils.format_dt(a_to, 'R')}", f"**By:** {by}"], icon)
             else:
-                e = _emb(GREEN, "✅ Timeout Removed", after.display_avatar.url)
-                e.description = f"{after.mention}"
+                e = _emb(GREEN, "✅ Timeout Removed", after.mention, icon=icon)
             await self._send(guild, "modlogs", "timeout", e, copy_id=after.id)
 
         if before.premium_since != after.premium_since:
             if after.premium_since and not before.premium_since:
-                e = _emb(PURPLE, "✨ New Boost!", after.display_avatar.url)
-                e.description = f"{after.mention} boosted the server!\nTotal boosts: {guild.premium_subscription_count}"
+                e = _emb(PURPLE, "✨ New Boost!", f"{after.mention} boosted the server!",
+                         [f"**Total boosts:** {guild.premium_subscription_count}"], icon)
                 await self._send(guild, "server", "boost", e, copy_id=after.id)
             elif before.premium_since and not after.premium_since:
-                e = _emb(RED, "💔 Boost Removed", after.display_avatar.url)
-                e.description = f"{after.mention} removed their boost.\nTotal boosts: {guild.premium_subscription_count}"
+                e = _emb(RED, "💔 Boost Removed", f"{after.mention} removed their boost.",
+                         [f"**Total boosts:** {guild.premium_subscription_count}"], icon)
                 await self._send(guild, "server", "boost", e, copy_id=after.id)
 
     # ── MESSAGES ─────────────────────────────────────────────────────────────
+    async def _deleter(self, message):
+        actor, _ = await self._actor(message.guild, discord.AuditLogAction.message_delete, message.author.id)
+        if actor and actor.id != message.author.id:
+            return actor.mention
+        return f"{message.author.mention} (self)"
+
     @commands.Cog.listener()
     async def on_message_delete(self, message):
         if not message.guild or (message.author and message.author.bot):
             return
 
-        e = _emb(RED, "🗑️ Message Deleted", message.author.display_avatar.url)
-        e.description = f"**Author:** {message.author.mention}\n**Channel:** {message.channel.mention}"
+        chi = await self._deleter(message)
+        rest = [f"**Channel:** {message.channel.mention}", f"**Deleted by:** {chi}"]
         if message.content:
-            e.add_field(name="Content", value=message.content[:1024], inline=False)
+            rest.append(f"**Content:**\n{message.content[:1500]}")
+        e = _emb(RED, "🗑️ Message Deleted", f"**Author:** {message.author.mention}", rest,
+                 message.author.display_avatar.url)
         await self._send(message.guild, "messages", "delete", e,
                          source_channel_id=message.channel.id, copy_id=message.author.id)
 
@@ -269,10 +287,10 @@ class Logs(commands.Cog):
                     files.append(await a.to_file(use_cached=True))
                 except (discord.HTTPException, discord.NotFound):
                     pass
-            fe = _emb(RED, "📎 Attachment Deleted", message.author.display_avatar.url)
-            fe.description = (f"**Author:** {message.author.mention}\n"
-                             f"**Channel:** {message.channel.mention}\n"
-                             f"**Files:** " + ", ".join(f"`{a.filename}`" for a in message.attachments)[:900])
+            nomi = "\n".join(f"[{a.filename}]({a.url})" for a in message.attachments)[:1000]
+            fe = _emb(RED, "📎 Attachment Deleted", f"**Author:** {message.author.mention}",
+                      [f"**Channel:** {message.channel.mention}", f"**Deleted by:** {chi}",
+                       f"**Files:**\n{nomi}"], message.author.display_avatar.url)
             await self._send(message.guild, "messages", "attachment", fe,
                              source_channel_id=message.channel.id, copy_id=message.author.id, files=files)
 
@@ -280,8 +298,8 @@ class Logs(commands.Cog):
     async def on_bulk_message_delete(self, messages):
         if not messages or not messages[0].guild:
             return
-        e = _emb(RED, "🧹 Bulk Message Delete")
-        e.description = f"**Channel:** {messages[0].channel.mention}\n**Messages deleted:** {len(messages)}"
+        e = _emb(RED, "🧹 Bulk Message Delete", f"**Channel:** {messages[0].channel.mention}",
+                 [f"**Messages deleted:** {len(messages)}"])
         await self._send(messages[0].guild, "messages", "bulk_delete", e,
                          source_channel_id=messages[0].channel.id)
 
@@ -289,10 +307,12 @@ class Logs(commands.Cog):
     async def on_message_edit(self, before, after):
         if not after.guild or (after.author and after.author.bot) or before.content == after.content:
             return
-        e = _emb(ORANGE, "✏️ Message Edited", after.author.display_avatar.url)
-        e.description = f"**Author:** {after.author.mention}\n**Channel:** {after.channel.mention}\n{jump(after.guild.id, after.channel.id, after.id)}"
-        e.add_field(name="Before", value=(before.content or "*empty*")[:1024], inline=False)
-        e.add_field(name="After", value=(after.content or "*empty*")[:1024], inline=False)
+        e = _emb(ORANGE, "✏️ Message Edited", f"**Author:** {after.author.mention}",
+                 [f"**Channel:** {after.channel.mention}",
+                  jump(after.guild.id, after.channel.id, after.id),
+                  f"**Before:** {(before.content or '*empty*')[:900]}",
+                  f"**After:** {(after.content or '*empty*')[:900]}"],
+                 after.author.display_avatar.url)
         await self._send(after.guild, "messages", "edit", e,
                          source_channel_id=after.channel.id, copy_id=after.author.id)
 
@@ -303,9 +323,9 @@ class Logs(commands.Cog):
         guild = self.bot.get_guild(payload.guild_id)
         if not guild:
             return
-        e = _emb(GREEN, "➕ Reaction Added")
-        e.description = (f"<@{payload.user_id}> reacted with {payload.emoji} in <#{payload.channel_id}>\n"
-                        f"{jump(payload.guild_id, payload.channel_id, payload.message_id)}")
+        e = _emb(GREEN, "➕ Reaction Added", f"<@{payload.user_id}> reacted with {payload.emoji}",
+                 [f"**Channel:** <#{payload.channel_id}>",
+                  jump(payload.guild_id, payload.channel_id, payload.message_id)])
         await self._send(guild, "messages", "reaction", e,
                          source_channel_id=payload.channel_id, copy_id=payload.user_id)
 
@@ -316,22 +336,20 @@ class Logs(commands.Cog):
         guild = self.bot.get_guild(payload.guild_id)
         if not guild:
             return
-        e = _emb(RED, "➖ Reaction Removed")
-        e.description = (f"<@{payload.user_id}> removed {payload.emoji} in <#{payload.channel_id}>\n"
-                        f"{jump(payload.guild_id, payload.channel_id, payload.message_id)}")
+        e = _emb(RED, "➖ Reaction Removed", f"<@{payload.user_id}> removed {payload.emoji}",
+                 [f"**Channel:** <#{payload.channel_id}>",
+                  jump(payload.guild_id, payload.channel_id, payload.message_id)])
         await self._send(guild, "messages", "reaction", e,
                          source_channel_id=payload.channel_id, copy_id=payload.user_id)
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread):
-        e = _emb(GREEN, "🧵 Thread Created")
-        e.description = f"{thread.mention} in <#{thread.parent_id}>"
+        e = _emb(GREEN, "🧵 Thread Created", thread.mention, [f"**Parent:** <#{thread.parent_id}>"])
         await self._send(thread.guild, "messages", "thread", e, source_channel_id=thread.parent_id)
 
     @commands.Cog.listener()
     async def on_thread_delete(self, thread):
-        e = _emb(RED, "🧵 Thread Deleted")
-        e.description = f"**{thread.name}** (was in <#{thread.parent_id}>)"
+        e = _emb(RED, "🧵 Thread Deleted", f"**{thread.name}**", [f"**Parent:** <#{thread.parent_id}>"])
         await self._send(thread.guild, "messages", "thread", e, source_channel_id=thread.parent_id)
 
     # Pin / Unpin (via audit log)
@@ -340,14 +358,14 @@ class Logs(commands.Cog):
         guild = entry.guild
         try:
             if entry.action == discord.AuditLogAction.message_pin:
-                e = _emb(GOLD, "📌 Message Pinned")
-                e.description = (f"{entry.user.mention} pinned a message in <#{entry.extra.channel.id}>\n"
-                                f"{jump(guild.id, entry.extra.channel.id, entry.extra.message_id)}")
+                e = _emb(GOLD, "📌 Message Pinned", f"{entry.user.mention} pinned a message",
+                         [f"**Channel:** <#{entry.extra.channel.id}>",
+                          jump(guild.id, entry.extra.channel.id, entry.extra.message_id)])
                 await self._send(guild, "messages", "pin", e, source_channel_id=entry.extra.channel.id)
             elif entry.action == discord.AuditLogAction.message_unpin:
-                e = _emb(GREY, "📌 Message Unpinned")
-                e.description = (f"{entry.user.mention} unpinned a message in <#{entry.extra.channel.id}>\n"
-                                f"{jump(guild.id, entry.extra.channel.id, entry.extra.message_id)}")
+                e = _emb(GREY, "📌 Message Unpinned", f"{entry.user.mention} unpinned a message",
+                         [f"**Channel:** <#{entry.extra.channel.id}>",
+                          jump(guild.id, entry.extra.channel.id, entry.extra.message_id)])
                 await self._send(guild, "messages", "pin", e, source_channel_id=entry.extra.channel.id)
         except (AttributeError, discord.HTTPException):
             pass
@@ -361,38 +379,39 @@ class Logs(commands.Cog):
     async def on_voice_state_update(self, member, before, after):
         guild = member.guild
         key = (guild.id, member.id)
+        icon = member.display_avatar.url
 
-        # Join / Leave / Move (with duration)
         if before.channel != after.channel:
             if before.channel is None:
                 self.voice_since[key] = now()
-                e = _emb(GREEN, "🔊 Voice Channel Joined", member.display_avatar.url)
-                e.description = f"{member.mention} joined **{after.channel.name}**"
+                e = _emb(GREEN, "🔊 Voice Channel Joined",
+                         f"{member.mention} **joined** {after.channel.mention}", icon=icon)
                 await self._send(guild, "voice", "join_leave", e,
                                  source_channel_id=after.channel.id, copy_id=member.id)
             elif after.channel is None:
                 t = self.voice_since.pop(key, None)
                 actor, _ = await self._actor(guild, discord.AuditLogAction.member_disconnect)
-                if actor and actor.id != member.id:
-                    e = _emb(RED, "🔌 Disconnected from Voice", member.display_avatar.url)
-                    e.description = f"{member.mention} was disconnected from **{before.channel.name}** by {actor.mention}"
-                else:
-                    e = _emb(RED, "🔊 Voice Channel Left", member.display_avatar.url)
-                    e.description = f"{member.mention} left **{before.channel.name}**"
+                rest = []
                 if t:
-                    e.add_field(name="Session",
-                                value=f"joined {discord.utils.format_dt(t, 'R')} • stayed **{_duration(int((now()-t).total_seconds()))}**",
-                                inline=False)
+                    rest.append(f"**Session:** joined {discord.utils.format_dt(t, 'R')} • stayed **{_duration(int((now()-t).total_seconds()))}**")
+                if actor and actor.id != member.id:
+                    e = _emb(RED, "🔌 Disconnected from Voice",
+                             f"{member.mention} was **disconnected** from {before.channel.mention} by {actor.mention}",
+                             rest, icon)
+                else:
+                    e = _emb(RED, "🔊 Voice Channel Left",
+                             f"{member.mention} **left** {before.channel.mention}", rest, icon)
                 await self._send(guild, "voice", "join_leave", e,
                                  source_channel_id=before.channel.id, copy_id=member.id)
             else:
                 t = self.voice_since.get(key)
                 self.voice_since[key] = now()
-                e = _emb(BLUE, "🔀 Voice Channel Moved", member.display_avatar.url)
-                e.description = f"{member.mention}: **{before.channel.name}** → **{after.channel.name}**"
+                rest = []
                 if t:
-                    e.add_field(name="Previous session",
-                                value=f"**{_duration(int((now()-t).total_seconds()))}**", inline=False)
+                    rest.append(f"**Previous session:** **{_duration(int((now()-t).total_seconds()))}**")
+                e = _emb(BLUE, "🔀 Voice Channel Moved",
+                         f"{member.mention} **moved** from {before.channel.mention} to {after.channel.mention}",
+                         rest, icon)
                 await self._send(guild, "voice", "join_leave", e,
                                  source_channel_id=after.channel.id, copy_id=member.id)
 
@@ -407,8 +426,7 @@ class Logs(commands.Cog):
         elif before.mute != after.mute:
             md.append("🔇 Server Muted" if after.mute else "🎙️ Server Unmuted")
         if md:
-            e = _emb(ORANGE, "🎙️ Voice State", member.display_avatar.url)
-            e.description = f"{member.mention}\n" + "\n".join(md)
+            e = _emb(ORANGE, "🎙️ Voice State", member.mention, md, icon)
             await self._send(guild, "voice", "mute_deaf", e,
                              source_channel_id=self._voice_channel(before, after), copy_id=member.id)
 
@@ -419,22 +437,19 @@ class Logs(commands.Cog):
         if before.self_video != after.self_video:
             sv.append("📷 Camera on" if after.self_video else "📷 Camera off")
         if sv:
-            e = _emb(PURPLE, "📺 Stream / Video", member.display_avatar.url)
-            e.description = f"{member.mention}\n" + "\n".join(sv)
+            e = _emb(PURPLE, "📺 Stream / Video", member.mention, sv, icon)
             await self._send(guild, "voice", "stream_video", e,
                              source_channel_id=self._voice_channel(before, after), copy_id=member.id)
 
     # ── CHANNELS ─────────────────────────────────────────────────────────────
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel):
-        e = _emb(GREEN, "📁 Channel Created")
-        e.description = f"{channel.mention} (`{channel.id}`)"
+        e = _emb(GREEN, "📁 Channel Created", f"{channel.mention} (`{channel.id}`)")
         await self._send(channel.guild, "channels", "create", e)
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel):
-        e = _emb(RED, "📁 Channel Deleted")
-        e.description = f"**{channel.name}** (`{channel.id}`)"
+        e = _emb(RED, "📁 Channel Deleted", f"**{channel.name}** (`{channel.id}`)")
         await self._send(channel.guild, "channels", "delete", e)
 
     @commands.Cog.listener()
@@ -449,32 +464,29 @@ class Logs(commands.Cog):
         if getattr(before, "slowmode_delay", None) != getattr(after, "slowmode_delay", None):
             changes.append(f"**Slowmode:** {getattr(after, 'slowmode_delay', 0)}s")
         if changes:
-            e = _emb(ORANGE, "📁 Channel Updated")
-            e.description = f"{after.mention}\n" + "\n".join(changes)
+            e = _emb(ORANGE, "📁 Channel Updated", after.mention, changes)
             await self._send(after.guild, "channels", "update", e, source_channel_id=after.id)
 
         if before.overwrites != after.overwrites:
-            e = _emb(ORANGE, "🔐 Channel Permissions Updated")
-            e.description = f"Permissions for {after.mention} were changed."
+            e = _emb(ORANGE, "🔐 Channel Permissions Updated",
+                     f"Permissions for {after.mention} were changed.")
             await self._send(after.guild, "channels", "permissions", e, source_channel_id=after.id)
 
     @commands.Cog.listener()
     async def on_webhooks_update(self, channel):
-        e = _emb(ORANGE, "🪝 Webhooks Updated")
-        e.description = f"Webhooks in {channel.mention} changed (created / deleted / modified)."
+        e = _emb(ORANGE, "🪝 Webhooks Updated",
+                 f"Webhooks in {channel.mention} changed (created / deleted / modified).")
         await self._send(channel.guild, "channels", "webhook", e, source_channel_id=channel.id)
 
     # ── ROLES ────────────────────────────────────────────────────────────────
     @commands.Cog.listener()
     async def on_guild_role_create(self, role):
-        e = _emb(GREEN, "🎭 Role Created")
-        e.description = f"{role.mention} (`{role.id}`)"
+        e = _emb(GREEN, "🎭 Role Created", f"{role.mention} (`{role.id}`)")
         await self._send(role.guild, "roles", "create", e)
 
     @commands.Cog.listener()
     async def on_guild_role_delete(self, role):
-        e = _emb(RED, "🎭 Role Deleted")
-        e.description = f"**{role.name}** (`{role.id}`)"
+        e = _emb(RED, "🎭 Role Deleted", f"**{role.name}** (`{role.id}`)")
         await self._send(role.guild, "roles", "delete", e)
 
     @commands.Cog.listener()
@@ -490,8 +502,7 @@ class Logs(commands.Cog):
             changes.append(f"**Hoisted:** {after.hoist}")
         if not changes:
             return
-        e = _emb(ORANGE, "🎭 Role Updated")
-        e.description = f"{after.mention}\n" + "\n".join(changes)
+        e = _emb(ORANGE, "🎭 Role Updated", after.mention, changes)
         await self._send(after.guild, "roles", "update", e)
 
     # ── SERVER ───────────────────────────────────────────────────────────────
@@ -506,8 +517,7 @@ class Logs(commands.Cog):
             changes.append(f"**Owner:** <@{before.owner_id}> → <@{after.owner_id}>")
         if not changes:
             return
-        e = _emb(ORANGE, "🛠️ Server Updated")
-        e.description = "\n".join(changes)
+        e = _emb(ORANGE, "🛠️ Server Updated", changes[0], changes[1:])
         if before.icon != after.icon and after.icon:
             e.set_thumbnail(url=after.icon.url)
         await self._send(after, "server", "update", e)
@@ -515,20 +525,23 @@ class Logs(commands.Cog):
     # ── ACTIONS ──────────────────────────────────────────────────────────────
     @commands.Cog.listener()
     async def on_invite_create(self, invite):
-        self.invite_cache.setdefault(invite.guild.id, {})[invite.code] = invite.uses or 0
-        e = _emb(BLUE, "✉️ Invite Created")
+        self.invite_cache.setdefault(invite.guild.id, {})[invite.code] = {
+            "uses": invite.uses or 0, "inviter": invite.inviter}
+        rest = []
         if invite.inviter:
-            e.description = f"Created by {invite.inviter.mention}"
-        e.add_field(name="Code", value=f"`{invite.code}`", inline=True)
+            rest.append(f"**Created by:** {invite.inviter.mention}")
         if invite.max_uses:
-            e.add_field(name="Max uses", value=str(invite.max_uses), inline=True)
+            rest.append(f"**Max uses:** {invite.max_uses}")
+        e = _emb(BLUE, "✉️ Invite Created", f"**Code:** `{invite.code}`", rest)
         await self._send(invite.guild, "actions", "invite_create", e)
 
     @commands.Cog.listener()
     async def on_invite_delete(self, invite):
-        self.invite_cache.get(invite.guild.id, {}).pop(invite.code, None)
-        e = _emb(RED, "✉️ Invite Deleted")
-        e.description = f"Code `{invite.code}` was deleted."
+        cached = self.invite_cache.get(invite.guild.id, {}).pop(invite.code, None)
+        rest = []
+        if cached and cached.get("inviter"):
+            rest.append(f"**Originally created by:** {cached['inviter'].mention}")
+        e = _emb(RED, "✉️ Invite Deleted", f"**Code:** `{invite.code}`", rest)
         await self._send(invite.guild, "actions", "invite_delete", e)
 
     @commands.Cog.listener()
@@ -536,36 +549,30 @@ class Logs(commands.Cog):
         prev = {e.id for e in before}
         curr = {e.id for e in after}
         for emo in [e for e in after if e.id not in prev]:
-            e = _emb(GREEN, "😀 Emoji Created")
-            e.description = f"{emo} `:{emo.name}:`"
+            e = _emb(GREEN, "😀 Emoji Created", f"{emo} `:{emo.name}:`")
             await self._send(guild, "actions", "emoji", e)
         for emo in [e for e in before if e.id not in curr]:
-            e = _emb(RED, "😀 Emoji Deleted")
-            e.description = f"`:{emo.name}:`"
+            e = _emb(RED, "😀 Emoji Deleted", f"`:{emo.name}:`")
             await self._send(guild, "actions", "emoji", e)
         names = {e.id: e.name for e in before}
         for emo in after:
             if emo.id in names and names[emo.id] != emo.name:
-                e = _emb(ORANGE, "😀 Emoji Renamed")
-                e.description = f"{emo} `:{names[emo.id]}:` → `:{emo.name}:`"
+                e = _emb(ORANGE, "😀 Emoji Renamed", f"{emo} `:{names[emo.id]}:` → `:{emo.name}:`")
                 await self._send(guild, "actions", "emoji", e)
 
     @commands.Cog.listener()
     async def on_scheduled_event_create(self, event):
-        e = _emb(GREEN, "📅 Event Created")
-        e.description = f"**{event.name}**"
+        e = _emb(GREEN, "📅 Event Created", f"**{event.name}**")
         await self._send(event.guild, "actions", "event", e)
 
     @commands.Cog.listener()
     async def on_scheduled_event_delete(self, event):
-        e = _emb(RED, "📅 Event Deleted")
-        e.description = f"**{event.name}**"
+        e = _emb(RED, "📅 Event Deleted", f"**{event.name}**")
         await self._send(event.guild, "actions", "event", e)
 
     @commands.Cog.listener()
     async def on_scheduled_event_update(self, before, after):
-        e = _emb(ORANGE, "📅 Event Updated")
-        e.description = f"**{after.name}**"
+        e = _emb(ORANGE, "📅 Event Updated", f"**{after.name}**")
         await self._send(after.guild, "actions", "event", e)
 
 
