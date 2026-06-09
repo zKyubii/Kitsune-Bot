@@ -23,11 +23,19 @@ def jump(guild_id, channel_id, message_id):
     return f"**[Jump to message](https://discord.com/channels/{guild_id}/{channel_id}/{message_id})**"
 
 
-def _emb(color, title, first, rest=None, icon=None):
-    """Embed pulito: titolo, prima riga, riga vuota, resto."""
+def _emb(color, title, first, rest=None, icon=None, user=None):
+    """Embed pulito.
+
+    Con `user`: header = nome utente + avatar, azione grande (## titolo), poi i dettagli.
+    Senza `user`: vecchio stile, titolo nell'header.
+    """
     e = discord.Embed(color=color, timestamp=now())
-    e.set_author(name=title, icon_url=icon)
-    desc = str(first)
+    if user is not None:
+        e.set_author(name=str(user), icon_url=user.display_avatar.url)
+        desc = f"## {title}\n{first}"
+    else:
+        e.set_author(name=title, icon_url=icon)
+        desc = str(first)
     if rest:
         desc += "\n\n" + "\n".join(rest)
     e.description = desc
@@ -153,7 +161,7 @@ class Logs(commands.Cog):
         if member.bot:
             actor, _ = await self._actor(guild, discord.AuditLogAction.bot_add, member.id)
             rest = [f"**Added by:** {actor.mention}"] if actor else []
-            e = _emb(GREEN, "🤖 Bot Added", f"{member.mention} (`{member.id}`)", rest, member.display_avatar.url)
+            e = _emb(GREEN, "🤖 Bot Added", f"{member.mention} (`{member.id}`)", rest, user=member)
             await self._send(guild, "members", "bot", e, copy_id=member.id)
             return
 
@@ -162,14 +170,14 @@ class Logs(commands.Cog):
         if invite:
             inviter = invite.inviter.mention if invite.inviter else "unknown"
             rest.append(f"**Invite used:** `{invite.code}` by {inviter}")
-        e = _emb(GREEN, "📥 Member Joined", f"{member.mention} (`{member.id}`)", rest, member.display_avatar.url)
+        e = _emb(GREEN, "📥 Member Joined", f"{member.mention} (`{member.id}`)", rest, user=member)
         await self._send(guild, "members", "join", e, copy_id=member.id)
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         guild = member.guild
         if member.bot:
-            e = _emb(RED, "🤖 Bot Removed", f"{member} (`{member.id}`)", icon=member.display_avatar.url)
+            e = _emb(RED, "🤖 Bot Removed", f"{member} (`{member.id}`)", user=member)
             await self._send(guild, "members", "bot", e, copy_id=member.id)
             return
 
@@ -178,12 +186,12 @@ class Logs(commands.Cog):
             rest = [f"**Moderator:** {actor.mention}"]
             if reason:
                 rest.append(f"**Reason:** {reason}")
-            e = _emb(RED, "👢 Member Kicked", f"{member} (`{member.id}`)", rest, member.display_avatar.url)
+            e = _emb(RED, "👢 Member Kicked", f"{member} (`{member.id}`)", rest, user=member)
             await self._send(guild, "modlogs", "kick", e, copy_id=member.id)
         else:
             roles = [r.mention for r in member.roles if r.name != "@everyone"]
             rest = [f"**Roles:** {' '.join(roles)[:900]}"] if roles else []
-            e = _emb(RED, "📤 Member Left", f"{member} (`{member.id}`)", rest, member.display_avatar.url)
+            e = _emb(RED, "📤 Member Left", f"{member} (`{member.id}`)", rest, user=member)
             await self._send(guild, "members", "leave", e, copy_id=member.id)
 
     @commands.Cog.listener()
@@ -194,20 +202,19 @@ class Logs(commands.Cog):
             rest.append(f"**Moderator:** {actor.mention}")
         if reason:
             rest.append(f"**Reason:** {reason}")
-        e = _emb(RED, "🔨 Member Banned", f"{user} (`{user.id}`)", rest, user.display_avatar.url)
+        e = _emb(RED, "🔨 Member Banned", f"{user} (`{user.id}`)", rest, user=user)
         await self._send(guild, "modlogs", "ban", e, copy_id=user.id)
 
     @commands.Cog.listener()
     async def on_member_unban(self, guild, user):
         actor, _ = await self._actor(guild, discord.AuditLogAction.unban, user.id)
         rest = [f"**Moderator:** {actor.mention}"] if actor else []
-        e = _emb(GREEN, "✅ Member Unbanned", f"{user} (`{user.id}`)", rest, user.display_avatar.url)
+        e = _emb(GREEN, "✅ Member Unbanned", f"{user} (`{user.id}`)", rest, user=user)
         await self._send(guild, "modlogs", "ban", e, copy_id=user.id)
 
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
         guild = after.guild
-        icon = after.display_avatar.url
 
         if before.roles != after.roles:
             added = [r for r in after.roles if r not in before.roles]
@@ -217,11 +224,11 @@ class Logs(commands.Cog):
                 by = "themselves (onboarding / channels & roles)"
             if added:
                 e = _emb(GREEN, "🎭 Role Given", after.mention,
-                         [f"**Roles:** {' '.join(r.mention for r in added)}", f"**By:** {by}"], icon)
+                         [f"**Roles:** {' '.join(r.mention for r in added)}", f"**By:** {by}"], user=after)
                 await self._send(guild, "members", "role_given", e, copy_id=after.id)
             if removed:
                 e = _emb(RED, "🎭 Role Taken", after.mention,
-                         [f"**Roles:** {' '.join(r.mention for r in removed)}", f"**By:** {by}"], icon)
+                         [f"**Roles:** {' '.join(r.mention for r in removed)}", f"**By:** {by}"], user=after)
                 await self._send(guild, "members", "role_taken", e, copy_id=after.id)
 
         if before.nick != after.nick:
@@ -229,11 +236,11 @@ class Logs(commands.Cog):
             e = _emb(ORANGE, "🏷️ Nickname Changed", after.mention,
                      [f"**Before:** {before.nick or '*none*'}",
                       f"**After:** {after.nick or '*none*'}",
-                      f"**Changed by:** {by}"], icon)
+                      f"**Changed by:** {by}"], user=after)
             await self._send(guild, "members", "nickname", e, copy_id=after.id)
 
         if before.guild_avatar != after.guild_avatar:
-            e = _emb(ORANGE, "🖼️ Server Avatar Changed", after.mention, icon=icon)
+            e = _emb(ORANGE, "🖼️ Server Avatar Changed", after.mention, user=after)
             if after.guild_avatar:
                 e.set_thumbnail(url=after.guild_avatar.url)
             await self._send(guild, "members", "avatar", e, copy_id=after.id)
@@ -244,19 +251,19 @@ class Logs(commands.Cog):
             if a_to:
                 by = await self._changed_by(guild, discord.AuditLogAction.member_update, after.id)
                 e = _emb(GOLD, "⏱️ Timeout Applied", after.mention,
-                         [f"**Expires:** {discord.utils.format_dt(a_to, 'R')}", f"**By:** {by}"], icon)
+                         [f"**Expires:** {discord.utils.format_dt(a_to, 'R')}", f"**By:** {by}"], user=after)
             else:
-                e = _emb(GREEN, "✅ Timeout Removed", after.mention, icon=icon)
+                e = _emb(GREEN, "✅ Timeout Removed", after.mention, user=after)
             await self._send(guild, "modlogs", "timeout", e, copy_id=after.id)
 
         if before.premium_since != after.premium_since:
             if after.premium_since and not before.premium_since:
                 e = _emb(PURPLE, "✨ New Boost!", f"{after.mention} boosted the server!",
-                         [f"**Total boosts:** {guild.premium_subscription_count}"], icon)
+                         [f"**Total boosts:** {guild.premium_subscription_count}"], user=after)
                 await self._send(guild, "server", "boost", e, copy_id=after.id)
             elif before.premium_since and not after.premium_since:
                 e = _emb(RED, "💔 Boost Removed", f"{after.mention} removed their boost.",
-                         [f"**Total boosts:** {guild.premium_subscription_count}"], icon)
+                         [f"**Total boosts:** {guild.premium_subscription_count}"], user=after)
                 await self._send(guild, "server", "boost", e, copy_id=after.id)
 
     # ── MESSAGES ─────────────────────────────────────────────────────────────
@@ -276,7 +283,7 @@ class Logs(commands.Cog):
         if message.content:
             rest.append(f"**Content:**\n{message.content[:1500]}")
         e = _emb(RED, "🗑️ Message Deleted", f"**Author:** {message.author.mention}", rest,
-                 message.author.display_avatar.url)
+                 user=message.author)
         await self._send(message.guild, "messages", "delete", e,
                          source_channel_id=message.channel.id, copy_id=message.author.id)
 
@@ -290,7 +297,7 @@ class Logs(commands.Cog):
             nomi = "\n".join(f"[{a.filename}]({a.url})" for a in message.attachments)[:1000]
             fe = _emb(RED, "📎 Attachment Deleted", f"**Author:** {message.author.mention}",
                       [f"**Channel:** {message.channel.mention}", f"**Deleted by:** {chi}",
-                       f"**Files:**\n{nomi}"], message.author.display_avatar.url)
+                       f"**Files:**\n{nomi}"], user=message.author)
             await self._send(message.guild, "messages", "attachment", fe,
                              source_channel_id=message.channel.id, copy_id=message.author.id, files=files)
 
@@ -312,7 +319,7 @@ class Logs(commands.Cog):
                   jump(after.guild.id, after.channel.id, after.id),
                   f"**Before:** {(before.content or '*empty*')[:900]}",
                   f"**After:** {(after.content or '*empty*')[:900]}"],
-                 after.author.display_avatar.url)
+                 user=after.author)
         await self._send(after.guild, "messages", "edit", e,
                          source_channel_id=after.channel.id, copy_id=after.author.id)
 
@@ -379,13 +386,12 @@ class Logs(commands.Cog):
     async def on_voice_state_update(self, member, before, after):
         guild = member.guild
         key = (guild.id, member.id)
-        icon = member.display_avatar.url
 
         if before.channel != after.channel:
             if before.channel is None:
                 self.voice_since[key] = now()
                 e = _emb(GREEN, "🔊 Voice Channel Joined",
-                         f"{member.mention} **joined** {after.channel.mention}", icon=icon)
+                         f"{member.mention} **joined** {after.channel.mention}", user=member)
                 await self._send(guild, "voice", "join_leave", e,
                                  source_channel_id=after.channel.id, copy_id=member.id)
             elif after.channel is None:
@@ -397,10 +403,10 @@ class Logs(commands.Cog):
                 if actor and actor.id != member.id:
                     e = _emb(RED, "🔌 Disconnected from Voice",
                              f"{member.mention} was **disconnected** from {before.channel.mention} by {actor.mention}",
-                             rest, icon)
+                             rest, user=member)
                 else:
                     e = _emb(RED, "🔊 Voice Channel Left",
-                             f"{member.mention} **left** {before.channel.mention}", rest, icon)
+                             f"{member.mention} **left** {before.channel.mention}", rest, user=member)
                 await self._send(guild, "voice", "join_leave", e,
                                  source_channel_id=before.channel.id, copy_id=member.id)
             else:
@@ -411,7 +417,7 @@ class Logs(commands.Cog):
                     rest.append(f"**Previous session:** **{_duration(int((now()-t).total_seconds()))}**")
                 e = _emb(BLUE, "🔀 Voice Channel Moved",
                          f"{member.mention} **moved** from {before.channel.mention} to {after.channel.mention}",
-                         rest, icon)
+                         rest, user=member)
                 await self._send(guild, "voice", "join_leave", e,
                                  source_channel_id=after.channel.id, copy_id=member.id)
 
@@ -426,7 +432,7 @@ class Logs(commands.Cog):
         elif before.mute != after.mute:
             md.append("🔇 Server Muted" if after.mute else "🎙️ Server Unmuted")
         if md:
-            e = _emb(ORANGE, "🎙️ Voice State", member.mention, md, icon)
+            e = _emb(ORANGE, "🎙️ Voice State", member.mention, md, user=member)
             await self._send(guild, "voice", "mute_deaf", e,
                              source_channel_id=self._voice_channel(before, after), copy_id=member.id)
 
@@ -437,7 +443,7 @@ class Logs(commands.Cog):
         if before.self_video != after.self_video:
             sv.append("📷 Camera on" if after.self_video else "📷 Camera off")
         if sv:
-            e = _emb(PURPLE, "📺 Stream / Video", member.mention, sv, icon)
+            e = _emb(PURPLE, "📺 Stream / Video", member.mention, sv, user=member)
             await self._send(guild, "voice", "stream_video", e,
                              source_channel_id=self._voice_channel(before, after), copy_id=member.id)
 

@@ -1,6 +1,9 @@
 # Segreti — NON caricare mai
 .env
 
+# Contesto per Claude (solo locale, non su GitHub)
+CLAUDE.md
+
 # Database (contiene i dati del server)
 kitsune.db
 
