@@ -18,6 +18,17 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     print(f"✅ Bot online come {bot.user}")
+
+    # ── STATO DEL BOT ──────────────────────────────────────────────────────
+    # Cambia il testo e il tipo come preferisci. Tipi disponibili:
+    #   discord.Game(name="...")                                         → "Sta giocando a ..."
+    #   discord.Activity(type=discord.ActivityType.watching, name="...") → "Guarda ..."
+    #   discord.Activity(type=discord.ActivityType.listening, name="...")→ "Ascolta ..."
+    #   discord.CustomActivity(name="...")                               → testo libero
+    # Status (pallino): online / idle / dnd / invisible
+    attivita = discord.Activity(type=discord.ActivityType.watching, name=".gg/haizen")
+    await bot.change_presence(status=discord.Status.online, activity=attivita)
+
     try:
         guild_ids = [g.strip() for g in os.getenv("GUILD_ID", "").split(",") if g.strip()]
         if guild_ids:
