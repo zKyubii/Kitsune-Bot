@@ -24,18 +24,16 @@ def jump(guild_id, channel_id, message_id):
 
 
 def _emb(color, title, first, rest=None, icon=None, user=None):
-    """Embed pulito.
+    """Embed pulito: intestazione ### per TUTTI i log, poi prima riga, riga vuota, resto.
 
-    Con `user`: header = nome utente + avatar, azione grande (## titolo), poi i dettagli.
-    Senza `user`: vecchio stile, titolo nell'header.
+    Con `user` mostra anche nome utente + avatar nell'header.
     """
     e = discord.Embed(color=color, timestamp=now())
     if user is not None:
         e.set_author(name=str(user), icon_url=user.display_avatar.url)
-        desc = f"## {title}\n{first}"
-    else:
-        e.set_author(name=title, icon_url=icon)
-        desc = str(first)
+    elif icon:
+        e.set_thumbnail(url=icon)
+    desc = f"### {title}\n{first}"
     if rest:
         desc += "\n\n" + "\n".join(rest)
     e.description = desc
@@ -474,9 +472,30 @@ class Logs(commands.Cog):
             await self._send(after.guild, "channels", "update", e, source_channel_id=after.id)
 
         if before.overwrites != after.overwrites:
-            e = _emb(ORANGE, "🔐 Channel Permissions Updated",
-                     f"Permissions for {after.mention} were changed.")
+            lines = []
+            for target in set(before.overwrites) | set(after.overwrites):
+                bo = before.overwrites.get(target)
+                ao = after.overwrites.get(target)
+                if bo == ao:
+                    continue
+                diff = self._perm_diff(bo, ao)
+                if diff:
+                    nome = target.mention if hasattr(target, "mention") else str(target)
+                    lines.append(f"**{nome}:** " + " · ".join(diff))
+            e = _emb(ORANGE, "🔐 Channel Permissions Updated", after.mention, lines[:12] or None)
             await self._send(after.guild, "channels", "permissions", e, source_channel_id=after.id)
+
+    @staticmethod
+    def _perm_diff(before_ow, after_ow):
+        b = dict(before_ow) if before_ow else {}
+        a = dict(after_ow) if after_ow else {}
+        out = []
+        for perm in set(b) | set(a):
+            if b.get(perm) != a.get(perm):
+                val = a.get(perm)
+                sym = "✅" if val is True else ("❌" if val is False else "➖")
+                out.append(f"{sym} {perm.replace('_', ' ')}")
+        return out
 
     @commands.Cog.listener()
     async def on_webhooks_update(self, channel):

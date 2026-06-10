@@ -586,6 +586,7 @@ class Moderation(commands.Cog):
         embed = discord.Embed(title="🔒 Canale bloccato", color=COLORI.get("ban", 0xE74C3C),
                               description=f"{canale.mention} è stato bloccato.\n📝 {motivo}")
         await interaction.response.send_message(embed=embed)
+        await self._lock_log(interaction, canale, "🔒 Channel Locked", "locked", motivo)
 
     # ── UNLOCK ────────────────────────────────────────────────────────────────
     @app_commands.command(name="unlock", description="Sblocca un canale precedentemente bloccato")
@@ -601,6 +602,19 @@ class Moderation(commands.Cog):
         embed = discord.Embed(title="🔓 Canale sbloccato", color=0x2ECC71,
                               description=f"{canale.mention} è di nuovo accessibile.")
         await interaction.response.send_message(embed=embed)
+        await self._lock_log(interaction, canale, "🔓 Channel Unlocked", "unlocked", None)
+
+    async def _lock_log(self, interaction, canale, titolo, verbo, motivo):
+        logs_cog = self.bot.get_cog("Logs")
+        if not logs_cog:
+            return
+        from cogs.logs import _emb
+        rest = [f"**Moderator:** {interaction.user.mention}"]
+        if motivo:
+            rest.append(f"**Reason:** {motivo}")
+        colore = 0xE74C3C if verbo == "locked" else 0x2ECC71
+        e = _emb(colore, titolo, f"{canale.mention} was **{verbo}**", rest)
+        await logs_cog._send(interaction.guild, "modlogs", "lock", e, source_channel_id=canale.id)
 
     # ── JAIL ──────────────────────────────────────────────────────────────────
     @app_commands.command(name="jail", description="Mette un utente in jail (vede solo il canale jail)")

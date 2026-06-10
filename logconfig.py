@@ -52,6 +52,7 @@ LOG_CATEGORIES = {
         "ban": "Ban / Unban",
         "kick": "Kick",
         "timeout": "Timeout / Untimeout",
+        "lock": "Lock / Unlock canale",
     }),
 }
 
