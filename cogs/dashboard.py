@@ -1128,11 +1128,129 @@ class PermissionsView(BaseView):
         return embed
 
 
+# ── PARTNERSHIP ───────────────────────────────────────────────────────────────
+class PartnershipChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self):
+        super().__init__(placeholder="📢 Canale dove pubblicare le partner...",
+                         channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("partnership", {})["channel"] = self.values[0].id
+        db.save_log_config(interaction.guild_id, config)
+        v = PartnershipSettingsView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class PartnershipRolesSelect(discord.ui.RoleSelect):
+    def __init__(self, ids):
+        super().__init__(placeholder="🎭 Ruoli che possono fare partnership...",
+                         min_values=0, max_values=15, row=2,
+                         default_values=_dv(ids, discord.SelectDefaultValueType.role))
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("partnership", {})["roles"] = [r.id for r in self.values]
+        db.save_log_config(interaction.guild_id, config)
+        v = PartnershipSettingsView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class PingConfigButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Configura ping", emoji="🔔", style=discord.ButtonStyle.secondary, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(PingConfigModal(self.view))
+
+
+class PingConfigModal(discord.ui.Modal, title="Configura ping"):
+    def __init__(self, parent_view):
+        super().__init__()
+        self.parent_view = parent_view
+        ping = db.get_log_config(parent_view.guild.id).get("partnership", {}).get("ping", {})
+        self.here = discord.ui.TextInput(
+            label="Membri richiesti per pingare @here", required=False, max_length=10,
+            default=str(ping.get("here") or ""), placeholder="es. 500")
+        self.everyone = discord.ui.TextInput(
+            label="Membri richiesti per pingare @everyone", required=False, max_length=10,
+            default=str(ping.get("everyone") or ""), placeholder="es. 1000")
+        self.custom_role = discord.ui.TextInput(
+            label="Ping personalizzato (ID ruolo)", required=False, max_length=25,
+            default=str(ping.get("custom_role") or ""), placeholder="ID del ruolo")
+        self.custom_members = discord.ui.TextInput(
+            label="Ping personalizzato (membri richiesti)", required=False, max_length=10,
+            default=str(ping.get("custom_members") or ""), placeholder="numero di membri")
+        for it in (self.here, self.everyone, self.custom_role, self.custom_members):
+            self.add_item(it)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        def _int(s):
+            s = (s or "").strip()
+            return int(s) if s.isdigit() else None
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("partnership", {})["ping"] = {
+            "here": _int(self.here.value),
+            "everyone": _int(self.everyone.value),
+            "custom_role": _int(self.custom_role.value),
+            "custom_members": _int(self.custom_members.value),
+        }
+        db.save_log_config(interaction.guild_id, config)
+        v = PartnershipSettingsView(self.parent_view.author_id, self.parent_view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class PartnershipSettingsView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        config = db.get_log_config(guild.id)
+        feats = config.get("features", {})
+        p = config.get("partnership", {})
+        self.add_item(FeatureToggleButton("partnership", feats.get("partnership", True)))
+        self.add_item(PingConfigButton())
+        self.add_item(PartnershipChannelSelect())
+        self.add_item(PartnershipRolesSelect(p.get("roles", [])))
+        self.add_item(BackButton("features"))
+
+    def build_embed(self) -> discord.Embed:
+        config = db.get_log_config(self.guild.id)
+        p = config.get("partnership", {})
+        feats = config.get("features", {})
+        attiva = "🟢 Attiva" if feats.get("partnership", True) else "🔴 Disattivata"
+        ch = self.guild.get_channel(p.get("channel")) if p.get("channel") else None
+        roles = [self.guild.get_role(r) for r in p.get("roles", [])]
+        roles = [r.mention for r in roles if r]
+        ping = p.get("ping", {})
+        ping_lines = []
+        if ping.get("here"):
+            ping_lines.append(f"@here da **{ping['here']}** membri")
+        if ping.get("everyone"):
+            ping_lines.append(f"@everyone da **{ping['everyone']}** membri")
+        if ping.get("custom_role") and ping.get("custom_members"):
+            ping_lines.append(f"<@&{ping['custom_role']}> da **{ping['custom_members']}** membri")
+
+        embed = discord.Embed(
+            title="🤝 Partnership",
+            description=("Sistema di partnership: chi è autorizzato usa `/partnership` per "
+                         "pubblicare una partner nel canale dedicato.\n"
+                         "Imposta il canale, i ruoli abilitati e i ping in base ai membri."),
+            color=BLU,
+        )
+        embed.add_field(name="Stato", value=attiva, inline=False)
+        embed.add_field(name="📢 Canale partner", value=ch.mention if ch else "❌ non impostato", inline=False)
+        embed.add_field(name="🎭 Ruoli autorizzati",
+                        value=" ".join(roles) if roles else "*nessuno (solo admin)*", inline=False)
+        embed.add_field(name="🔔 Ping", value="\n".join(ping_lines) if ping_lines else "*nessuno*", inline=False)
+        return embed
+
+
 def _feature_view(key: str, author_id: int, guild: discord.Guild):
     if key == "quote":
         return QuoteSettingsView(author_id, guild)
     if key == "confession":
         return ConfessionSettingsView(author_id, guild)
+    if key == "partnership":
+        return PartnershipSettingsView(author_id, guild)
     return FeatureDetailView(author_id, guild, key)
 
 

@@ -67,6 +67,16 @@ def init_db():
             data      TEXT,
             PRIMARY KEY (guild_id, name)
         );
+
+        CREATE TABLE IF NOT EXISTS partnerships (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id     INTEGER,
+            channel_id   INTEGER,
+            message_ids  TEXT,
+            author_id    INTEGER,
+            manager_id   INTEGER,
+            created_at   TEXT
+        );
     """)
     conn.commit()
 
@@ -265,3 +275,29 @@ def delete_embed(guild_id: int, name: str) -> bool:
     cur = conn.execute("DELETE FROM embeds WHERE guild_id = ? AND name = ?", (guild_id, name))
     conn.commit()
     return cur.rowcount > 0
+
+
+# ── PARTNERSHIP ─────────────────────────────────────────────────────────────
+def add_partnership(guild_id: int, channel_id: int, message_ids: list,
+                    author_id: int, manager_id: int | None):
+    conn.execute(
+        """
+        INSERT INTO partnerships (guild_id, channel_id, message_ids, author_id, manager_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (guild_id, channel_id, json.dumps(message_ids), author_id, manager_id,
+         datetime.datetime.now(datetime.timezone.utc).isoformat()),
+    )
+    conn.commit()
+
+
+def get_partnerships_by_user(guild_id: int, user_id: int) -> list:
+    return conn.execute(
+        "SELECT * FROM partnerships WHERE guild_id = ? AND (author_id = ? OR manager_id = ?)",
+        (guild_id, user_id, user_id),
+    ).fetchall()
+
+
+def delete_partnership(pid: int):
+    conn.execute("DELETE FROM partnerships WHERE id = ?", (pid,))
+    conn.commit()

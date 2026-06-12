@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import datetime
+import io
 
 import database as db
 import logconfig
@@ -85,13 +86,23 @@ class Logs(commands.Cog):
 
         bl = config.get("log_blacklist", {})
         dest = None
-        if source_channel_id and source_channel_id in bl.get("channels", []):
-            secret = bl.get("secret_channel")
-            if not secret:
-                return
-            dest = guild.get_channel(secret)
-            if not dest:
-                return
+        if source_channel_id is not None:
+            # source_channel_id può essere un singolo id o una lista di id
+            # (es. spostamento vocale = canale di partenza + canale di arrivo).
+            if isinstance(source_channel_id, (list, tuple, set)):
+                ids = [c for c in source_channel_id if c]
+            else:
+                ids = [source_channel_id]
+            blacklisted = bl.get("channels", [])
+            # Se ANCHE UNO SOLO dei canali coinvolti è blacklistato, l'intero log
+            # va nel canale segreto: i log generali non devono saperne nulla.
+            if any(cid in blacklisted for cid in ids):
+                secret = bl.get("secret_channel")
+                if not secret:
+                    return
+                dest = guild.get_channel(secret)
+                if not dest:
+                    return
 
         ch = dest or guild.get_channel(logconfig.get_channel_id(config, category))
         if not ch:
@@ -303,10 +314,38 @@ class Logs(commands.Cog):
     async def on_bulk_message_delete(self, messages):
         if not messages or not messages[0].guild:
             return
-        e = _emb(RED, "🧹 Bulk Message Delete", f"**Channel:** {messages[0].channel.mention}",
-                 [f"**Messages deleted:** {len(messages)}"])
-        await self._send(messages[0].guild, "messages", "bulk_delete", e,
-                         source_channel_id=messages[0].channel.id)
+        guild = messages[0].guild
+        channel = messages[0].channel
+
+        # File .txt con TUTTI i messaggi cancellati (cronologici).
+        lines = []
+        for m in sorted(messages, key=lambda x: (x.created_at or now())):
+            author = f"{m.author} ({m.author.id})" if m.author else "Unknown"
+            ts = (m.created_at or now()).strftime("%Y-%m-%d %H:%M:%S UTC")
+            content = m.content or "[no text content]"
+            extra = ""
+            if m.attachments:
+                extra = "\n" + "\n".join(f"[attachment] {a.url}" for a in m.attachments)
+            lines.append(f"{author} @ {ts}:\n{content}{extra}\n")
+        full_text = "\n".join(lines)
+        buf = io.BytesIO(full_text.encode("utf-8"))
+        log_file = discord.File(buf, filename="deleted_messages.txt")
+
+        # Anteprima: primi 10 messaggi nell'embed, il resto nel file.
+        preview = []
+        for m in messages[:10]:
+            author = m.author.mention if m.author else "Unknown"
+            content = (m.content or "*[no text]*").replace("\n", " ")
+            if len(content) > 80:
+                content = content[:80] + "…"
+            preview.append(f"**{author}:** {content}")
+        if len(messages) > 10:
+            preview.append(f"*…and {len(messages) - 10} more (see attached file)*")
+
+        rest = [f"**Messages deleted:** {len(messages)}", ""] + preview
+        e = _emb(RED, "🧹 Bulk Message Delete", f"**Channel:** {channel.mention}", rest)
+        await self._send(guild, "messages", "bulk_delete", e,
+                         source_channel_id=channel.id, files=[log_file])
 
     @commands.Cog.listener()
     async def on_message_edit(self, before, after):
@@ -417,7 +456,8 @@ class Logs(commands.Cog):
                          f"{member.mention} **moved** from {before.channel.mention} to {after.channel.mention}",
                          rest, user=member)
                 await self._send(guild, "voice", "join_leave", e,
-                                 source_channel_id=after.channel.id, copy_id=member.id)
+                                 source_channel_id=[before.channel.id, after.channel.id],
+                                 copy_id=member.id)
 
         # Mute / Deafen — deafen has priority (deafening auto-mutes)
         md = []
@@ -481,7 +521,7 @@ class Logs(commands.Cog):
                 diff = self._perm_diff(bo, ao)
                 if diff:
                     nome = target.mention if hasattr(target, "mention") else str(target)
-                    lines.append(f"**{nome}:** " + " · ".join(diff))
+                    lines.append(f"**{nome}:**\n" + "\n".join(diff))
             e = _emb(ORANGE, "🔐 Channel Permissions Updated", after.mention, lines[:12] or None)
             await self._send(after.guild, "channels", "permissions", e, source_channel_id=after.id)
 

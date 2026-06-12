@@ -62,6 +62,7 @@ FEATURES = {
     "fun": "💘 Fun (ship)",
     "confession": "🤫 Confession",
     "quote": "💬 Quote",
+    "partnership": "🤝 Partnership",
 }
 
 
