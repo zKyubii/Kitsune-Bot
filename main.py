@@ -26,7 +26,7 @@ async def on_ready():
     #   discord.Activity(type=discord.ActivityType.listening, name="...")→ "Ascolta ..."
     #   discord.CustomActivity(name="...")                               → testo libero
     # Status (pallino): online / idle / dnd / invisible
-    attivita = discord.Activity(type=discord.ActivityType.watching, name=".gg/haizen")
+    attivita = discord.CustomActivity(name=".gg/haizen")
     await bot.change_presence(status=discord.Status.online, activity=attivita)
 
     try:
