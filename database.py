@@ -77,6 +77,13 @@ def init_db():
             manager_id   INTEGER,
             created_at   TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS levels (
+            guild_id  INTEGER,
+            user_id   INTEGER,
+            xp        INTEGER DEFAULT 0,
+            PRIMARY KEY (guild_id, user_id)
+        );
     """)
     conn.commit()
 
@@ -301,3 +308,52 @@ def get_partnerships_by_user(guild_id: int, user_id: int) -> list:
 def delete_partnership(pid: int):
     conn.execute("DELETE FROM partnerships WHERE id = ?", (pid,))
     conn.commit()
+
+
+# ── LIVELLI ─────────────────────────────────────────────────────────────────
+def get_xp(guild_id: int, user_id: int) -> int:
+    row = conn.execute(
+        "SELECT xp FROM levels WHERE guild_id = ? AND user_id = ?", (guild_id, user_id)
+    ).fetchone()
+    return row["xp"] if row else 0
+
+
+def set_xp(guild_id: int, user_id: int, xp: int) -> int:
+    xp = max(0, int(xp))
+    conn.execute(
+        """
+        INSERT INTO levels (guild_id, user_id, xp) VALUES (?, ?, ?)
+        ON CONFLICT(guild_id, user_id) DO UPDATE SET xp = excluded.xp
+        """,
+        (guild_id, user_id, xp),
+    )
+    conn.commit()
+    return xp
+
+
+def add_xp(guild_id: int, user_id: int, amount: int) -> int:
+    return set_xp(guild_id, user_id, get_xp(guild_id, user_id) + int(amount))
+
+
+def reset_level_user(guild_id: int, user_id: int):
+    conn.execute("DELETE FROM levels WHERE guild_id = ? AND user_id = ?", (guild_id, user_id))
+    conn.commit()
+
+
+def level_top(guild_id: int, limit: int, offset: int = 0) -> list:
+    return conn.execute(
+        "SELECT user_id, xp FROM levels WHERE guild_id = ? AND xp > 0 "
+        "ORDER BY xp DESC LIMIT ? OFFSET ?",
+        (guild_id, limit, offset),
+    ).fetchall()
+
+
+def level_rank(guild_id: int, user_id: int) -> int:
+    row = conn.execute(
+        """
+        SELECT COUNT(*) + 1 AS r FROM levels
+        WHERE guild_id = ? AND xp > (SELECT xp FROM levels WHERE guild_id = ? AND user_id = ?)
+        """,
+        (guild_id, guild_id, user_id),
+    ).fetchone()
+    return row["r"] if row else 1

@@ -4,6 +4,7 @@ from discord import app_commands
 import datetime
 
 import database as db
+import levelsystem as ls
 from logconfig import LOG_CATEGORIES, FEATURES, SPAM_CATEGORIES, SANCTIONS, categoria_cfg
 
 BLU = 0x5865F2
@@ -20,7 +21,8 @@ def build_main_embed(guild: discord.Guild, config: dict) -> discord.Embed:
         value=(
             "📋 **Log** — canali ed eventi di log\n"
             "🔧 **Funzioni** — attiva/disattiva le funzioni del bot\n"
-            "🛡️ **Moderazione** — regole automatiche dei warn"
+            "🛡️ **Moderazione** — regole automatiche dei warn\n"
+            "📊 **Livelli** — sistema XP, premi, classifica"
         ),
         inline=False,
     )
@@ -50,6 +52,9 @@ class BackButton(discord.ui.Button):
         elif self.destination == "categories":
             view = SpamCategoriesView(self.view.author_id, self.view.guild)
             embed = view.build_embed()
+        elif self.destination == "levels":
+            view = LevelsView(self.view.author_id, self.view.guild)
+            embed = view.build_embed()
         else:
             view = DashboardView(self.view.author_id, self.view.guild)
             embed = build_main_embed(self.view.guild, db.get_log_config(self.view.guild.id))
@@ -65,6 +70,8 @@ class HomeSelect(discord.ui.Select):
                                  description="Attiva o disattiva le funzioni del bot"),
             discord.SelectOption(label="🛡️ Moderazione", value="mod",
                                  description="Antispam, jail, warn, lock, autorole, permessi"),
+            discord.SelectOption(label="📊 Livelli", value="levels",
+                                 description="Sistema XP, premi, multiplier, classifica"),
         ]
         super().__init__(placeholder="Scegli una sezione...", options=options)
 
@@ -73,6 +80,8 @@ class HomeSelect(discord.ui.Select):
             view = LogsMenuView(self.view.author_id, self.view.guild)
         elif self.values[0] == "mod":
             view = ModerationView(self.view.author_id, self.view.guild)
+        elif self.values[0] == "levels":
+            view = LevelsView(self.view.author_id, self.view.guild)
         else:
             view = FeaturesView(self.view.author_id, self.view.guild)
         await interaction.response.edit_message(embed=view.build_embed(), view=view)
@@ -1311,6 +1320,496 @@ class FeaturesView(BaseView):
             color=BLU,
         )
         embed.add_field(name="Stato", value="\n".join(righe), inline=False)
+        return embed
+
+
+# ── LIVELLI ───────────────────────────────────────────────────────────────────
+class LevelToggleButton(discord.ui.Button):
+    def __init__(self, key, label, on, row):
+        super().__init__(label=label, emoji="🟢" if on else "🔴",
+                         style=discord.ButtonStyle.success if on else discord.ButtonStyle.danger, row=row)
+        self.key = key
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        c = ls.cfg(config)
+        config.setdefault("levels", {})[self.key] = not c[self.key]
+        db.save_log_config(interaction.guild_id, config)
+        v = LevelsView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class XpCooldownModal(discord.ui.Modal, title="XP & Cooldown"):
+    def __init__(self, author_id, guild):
+        super().__init__()
+        self.author_id = author_id
+        self.guild = guild
+        c = ls.cfg(db.get_log_config(guild.id))
+        self.xp_min = discord.ui.TextInput(label="XP minimi per messaggio", default=str(c["xp_min"]), max_length=6)
+        self.xp_max = discord.ui.TextInput(label="XP massimi per messaggio", default=str(c["xp_max"]), max_length=6)
+        self.voice_xp = discord.ui.TextInput(label="XP per intervallo in vocale", default=str(c["voice_xp"]), max_length=6)
+        self.cd_text = discord.ui.TextInput(label="Cooldown chat (es. 60s, 1m)",
+                                            default=ls.fmt_duration(c["cooldown_text"]), max_length=8)
+        self.cd_voice = discord.ui.TextInput(label="Cooldown vocale (es. 1m, 5m)",
+                                             default=ls.fmt_duration(c["cooldown_voice"]), max_length=8)
+        for it in (self.xp_min, self.xp_max, self.voice_xp, self.cd_text, self.cd_voice):
+            self.add_item(it)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        c = ls.cfg(config)
+        lv = config.setdefault("levels", {})
+
+        def _i(s, d):
+            s = (s or "").strip()
+            return max(0, int(s)) if s.isdigit() else d
+        lv["xp_min"] = _i(self.xp_min.value, c["xp_min"])
+        lv["xp_max"] = _i(self.xp_max.value, c["xp_max"])
+        lv["voice_xp"] = _i(self.voice_xp.value, c["voice_xp"])
+        ct = ls.parse_duration(self.cd_text.value)
+        cv = ls.parse_duration(self.cd_voice.value)
+        lv["cooldown_text"] = ct if ct is not None else c["cooldown_text"]
+        lv["cooldown_voice"] = cv if cv is not None else c["cooldown_voice"]
+        db.save_log_config(interaction.guild_id, config)
+        v = LevelsView(self.author_id, self.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class XpCooldownButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="⚙️ XP & Cooldown", style=discord.ButtonStyle.secondary, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(XpCooldownModal(self.view.author_id, self.view.guild))
+
+
+class LevelSectionSelect(discord.ui.Select):
+    def __init__(self):
+        opts = [
+            ("📈 Curva XP", "curva", "Base, incremento e override per livello"),
+            ("🎉 Level-up", "levelup", "Canale e messaggio di salita di livello"),
+            ("🏅 Ruoli premio", "rewards", "Assegna ruoli a certi livelli"),
+            ("✨ Multiplier", "multiplier", "Ruoli che danno XP extra"),
+            ("🚫 Blacklist", "blacklist", "Ruoli/utenti esclusi dagli XP"),
+        ]
+        super().__init__(placeholder="Apri una sotto-sezione...", row=0,
+                         options=[discord.SelectOption(label=l, value=v, description=d) for l, v, d in opts])
+
+    async def callback(self, interaction: discord.Interaction):
+        mapping = {"curva": LevelCurveView, "levelup": LevelUpView, "rewards": LevelRewardsView,
+                   "multiplier": LevelMultiplierView, "blacklist": LevelBlacklistView}
+        v = mapping[self.values[0]](self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class LevelsView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        c = ls.cfg(db.get_log_config(guild.id))
+        self.add_item(LevelSectionSelect())
+        self.add_item(LevelToggleButton("enabled", "Sistema", c["enabled"], 1))
+        self.add_item(LevelToggleButton("text_enabled", "XP chat", c["text_enabled"], 1))
+        self.add_item(LevelToggleButton("voice_enabled", "XP vocale", c["voice_enabled"], 1))
+        self.add_item(XpCooldownButton())
+        self.add_item(LevelToggleButton("coleave", "Coleave", c["coleave"], 3))
+        self.add_item(LevelToggleButton("reward_replace", "Reward replace", c["reward_replace"], 3))
+        self.add_item(BackButton("home"))
+
+    def build_embed(self) -> discord.Embed:
+        c = ls.cfg(db.get_log_config(self.guild.id))
+        sn = lambda b: "🟢" if b else "🔴"
+        embed = discord.Embed(
+            title="📊 Livelli",
+            description=("Sistema di XP e livelli. Usa il menu in alto per le sotto-sezioni,\n"
+                         "i pulsanti per attivare/disattivare e impostare XP/cooldown.\n"
+                         "**Coleave**: azzera gli XP quando un utente esce dal server.\n"
+                         "**Reward replace** 🟢 = sostituisce i ruoli premio · 🔴 = li accumula."),
+            color=BLU,
+        )
+        embed.add_field(name="Stato",
+                        value=f"{sn(c['enabled'])} Sistema · {sn(c['text_enabled'])} Chat · {sn(c['voice_enabled'])} Vocale",
+                        inline=False)
+        embed.add_field(name="XP messaggio", value=f"{c['xp_min']}–{c['xp_max']}", inline=True)
+        embed.add_field(name="XP vocale", value=f"{c['voice_xp']}", inline=True)
+        embed.add_field(name="Cooldown",
+                        value=f"chat {ls.fmt_duration(c['cooldown_text'])} · voce {ls.fmt_duration(c['cooldown_voice'])}",
+                        inline=True)
+        embed.add_field(name="Coleave", value=sn(c["coleave"]), inline=True)
+        embed.add_field(name="Reward replace", value=sn(c["reward_replace"]), inline=True)
+        return embed
+
+
+# — Curva XP —
+class CurveBaseModal(discord.ui.Modal, title="Curva XP"):
+    def __init__(self, author_id, guild):
+        super().__init__()
+        self.author_id = author_id
+        self.guild = guild
+        c = ls.cfg(db.get_log_config(guild.id))
+        self.base = discord.ui.TextInput(label="XP base (livello 0 → 1)", default=str(c["curve_base"]), max_length=8)
+        self.incr = discord.ui.TextInput(label="Incremento per livello", default=str(c["curve_increment"]), max_length=8)
+        self.add_item(self.base)
+        self.add_item(self.incr)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        c = ls.cfg(config)
+        lv = config.setdefault("levels", {})
+        lv["curve_base"] = int(self.base.value) if self.base.value.strip().isdigit() else c["curve_base"]
+        lv["curve_increment"] = int(self.incr.value) if self.incr.value.strip().isdigit() else c["curve_increment"]
+        db.save_log_config(interaction.guild_id, config)
+        v = LevelCurveView(self.author_id, self.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class CurveOverrideModal(discord.ui.Modal, title="Override livello"):
+    def __init__(self, author_id, guild):
+        super().__init__()
+        self.author_id = author_id
+        self.guild = guild
+        self.livello = discord.ui.TextInput(label="Livello", placeholder="es. 5", max_length=4)
+        self.xp = discord.ui.TextInput(label="XP per avanzare (vuoto = rimuovi)", required=False, max_length=8,
+                                       placeholder="es. 1000")
+        self.add_item(self.livello)
+        self.add_item(self.xp)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        ov = config.setdefault("levels", {}).setdefault("level_overrides", {})
+        if self.livello.value.strip().isdigit():
+            lvl = self.livello.value.strip()
+            if self.xp.value.strip().isdigit():
+                ov[lvl] = int(self.xp.value.strip())
+            else:
+                ov.pop(lvl, None)
+            db.save_log_config(interaction.guild_id, config)
+        v = LevelCurveView(self.author_id, self.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class CurveBaseButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="📈 Base / Incremento", style=discord.ButtonStyle.secondary, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(CurveBaseModal(self.view.author_id, self.view.guild))
+
+
+class CurveOverrideButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="✏️ Override livello", style=discord.ButtonStyle.secondary, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(CurveOverrideModal(self.view.author_id, self.view.guild))
+
+
+class LevelCurveView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        self.add_item(CurveBaseButton())
+        self.add_item(CurveOverrideButton())
+        self.add_item(BackButton("levels"))
+
+    def build_embed(self) -> discord.Embed:
+        c = ls.cfg(db.get_log_config(self.guild.id))
+        # XP totali per raggiungere i primi livelli
+        righe = []
+        tot = 0
+        for lvl in range(0, 10):
+            tot += ls.cost(c, lvl)
+            righe.append(f"Lv {lvl + 1} → `{tot}` XP totali")
+        ov = c.get("level_overrides", {})
+        ov_txt = ", ".join(f"Lv{k}={v}" for k, v in sorted(ov.items(), key=lambda x: int(x[0]))) or "*nessuno*"
+        embed = discord.Embed(
+            title="📈 Curva XP",
+            description=(f"**Base:** {c['curve_base']} · **Incremento:** {c['curve_increment']}\n"
+                         f"Formula: XP per livello L = base + incremento × L\n\n"
+                         "Usa **Override** per fissare manualmente l'XP di un livello specifico."),
+            color=BLU,
+        )
+        embed.add_field(name="Anteprima primi livelli", value="\n".join(righe), inline=False)
+        embed.add_field(name="Override", value=ov_txt, inline=False)
+        return embed
+
+
+# — Level-up (canale + messaggio) —
+class LevelUpChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self):
+        super().__init__(placeholder="📢 Canale dei messaggi di level-up...",
+                         channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("levels", {})["levelup_channel"] = self.values[0].id
+        db.save_log_config(interaction.guild_id, config)
+        v = LevelUpView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class LevelUpResetButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Usa il canale del messaggio", emoji="♻️", style=discord.ButtonStyle.secondary, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("levels", {})["levelup_channel"] = None
+        db.save_log_config(interaction.guild_id, config)
+        v = LevelUpView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class LevelUpMessageModal(discord.ui.Modal, title="Messaggio level-up"):
+    def __init__(self, author_id, guild):
+        super().__init__()
+        self.author_id = author_id
+        self.guild = guild
+        c = ls.cfg(db.get_log_config(guild.id))
+        self.msg = discord.ui.TextInput(
+            label="Messaggio", style=discord.TextStyle.paragraph, max_length=1500,
+            default=c["levelup_message"],
+            placeholder="GG {user}, sei al livello {level}!")
+        self.add_item(self.msg)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("levels", {})["levelup_message"] = self.msg.value
+        db.save_log_config(interaction.guild_id, config)
+        v = LevelUpView(self.author_id, self.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class LevelUpMessageButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="✏️ Messaggio", style=discord.ButtonStyle.secondary, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(LevelUpMessageModal(self.view.author_id, self.view.guild))
+
+
+class LevelUpView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        self.add_item(LevelUpChannelSelect())
+        self.add_item(LevelUpResetButton())
+        self.add_item(LevelUpMessageButton())
+        self.add_item(BackButton("levels"))
+
+    def build_embed(self) -> discord.Embed:
+        c = ls.cfg(db.get_log_config(self.guild.id))
+        ch = self.guild.get_channel(c["levelup_channel"]) if c["levelup_channel"] else None
+        dove = ch.mention if ch else "Nel canale dove l'utente ha scritto"
+        embed = discord.Embed(
+            title="🎉 Messaggio di level-up",
+            description=("Messaggio inviato quando un utente sale di livello.\n"
+                         "**Variabili:** `{user}` `{user_name}` `{level}` `{server}`"),
+            color=BLU,
+        )
+        embed.add_field(name="📍 Canale", value=dove, inline=False)
+        embed.add_field(name="💬 Messaggio", value=f"```{c['levelup_message'][:500]}```", inline=False)
+        return embed
+
+
+# — Ruoli premio —
+class RewardLevelModal(discord.ui.Modal, title="Ruolo premio"):
+    def __init__(self, author_id, guild, role):
+        super().__init__()
+        self.author_id = author_id
+        self.guild = guild
+        self.role = role
+        self.livello = discord.ui.TextInput(label=f"Livello per {role.name}", placeholder="es. 10", max_length=4)
+        self.add_item(self.livello)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        rewards = config.setdefault("levels", {}).setdefault("rewards", {})
+        if self.livello.value.strip().isdigit():
+            rewards[self.livello.value.strip()] = self.role.id
+            db.save_log_config(interaction.guild_id, config)
+        v = LevelRewardsView(self.author_id, self.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class RewardRoleSelect(discord.ui.RoleSelect):
+    def __init__(self):
+        super().__init__(placeholder="🏅 Scegli un ruolo da assegnare a un livello...",
+                         min_values=1, max_values=1, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(
+            RewardLevelModal(self.view.author_id, self.view.guild, self.values[0]))
+
+
+class RewardRemoveSelect(discord.ui.Select):
+    def __init__(self, guild, rewards):
+        options = []
+        for lvl, rid in sorted(rewards.items(), key=lambda x: int(x[0])):
+            role = guild.get_role(rid)
+            nome = role.name if role else f"ruolo {rid}"
+            options.append(discord.SelectOption(label=f"Livello {lvl} → {nome}"[:100], value=str(lvl)))
+        super().__init__(placeholder="🗑️ Rimuovi un premio...", options=options, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("levels", {}).setdefault("rewards", {}).pop(self.values[0], None)
+        db.save_log_config(interaction.guild_id, config)
+        v = LevelRewardsView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class LevelRewardsView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        rewards = ls.cfg(db.get_log_config(guild.id)).get("rewards", {})
+        self.add_item(RewardRoleSelect())
+        if rewards:
+            self.add_item(RewardRemoveSelect(guild, rewards))
+        self.add_item(BackButton("levels"))
+
+    def build_embed(self) -> discord.Embed:
+        c = ls.cfg(db.get_log_config(self.guild.id))
+        rewards = c.get("rewards", {})
+        if rewards:
+            righe = []
+            for lvl, rid in sorted(rewards.items(), key=lambda x: int(x[0])):
+                righe.append(f"**Lv {lvl}** → <@&{rid}>")
+            testo = "\n".join(righe)
+        else:
+            testo = "*nessun premio impostato*"
+        embed = discord.Embed(
+            title="🏅 Ruoli premio",
+            description=("Assegna un ruolo al raggiungimento di un livello.\n"
+                         f"**Reward replace:** {'🟢 sostituisce' if c['reward_replace'] else '🔴 accumula'} "
+                         "(modificabile dalla pagina Livelli)."),
+            color=BLU,
+        )
+        embed.add_field(name="Premi", value=testo, inline=False)
+        return embed
+
+
+# — Multiplier —
+class MultiplierValueModal(discord.ui.Modal, title="Multiplier ruolo"):
+    def __init__(self, author_id, guild, role):
+        super().__init__()
+        self.author_id = author_id
+        self.guild = guild
+        self.role = role
+        self.valore = discord.ui.TextInput(label=f"Moltiplicatore per {role.name}", placeholder="es. 2 o 1.5",
+                                           max_length=6)
+        self.add_item(self.valore)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        mult = config.setdefault("levels", {}).setdefault("multipliers", {})
+        try:
+            v = float(self.valore.value.replace(",", "."))
+            mult[str(self.role.id)] = v
+            db.save_log_config(interaction.guild_id, config)
+        except ValueError:
+            pass
+        view = LevelMultiplierView(self.author_id, self.guild)
+        await interaction.response.edit_message(embed=view.build_embed(), view=view)
+
+
+class MultiplierRoleSelect(discord.ui.RoleSelect):
+    def __init__(self):
+        super().__init__(placeholder="✨ Scegli un ruolo a cui dare un multiplier...",
+                         min_values=1, max_values=1, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(
+            MultiplierValueModal(self.view.author_id, self.view.guild, self.values[0]))
+
+
+class MultiplierRemoveSelect(discord.ui.Select):
+    def __init__(self, guild, mult):
+        options = []
+        for rid, val in mult.items():
+            role = guild.get_role(int(rid))
+            nome = role.name if role else f"ruolo {rid}"
+            options.append(discord.SelectOption(label=f"{nome} ×{val}"[:100], value=str(rid)))
+        super().__init__(placeholder="🗑️ Rimuovi un multiplier...", options=options, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("levels", {}).setdefault("multipliers", {}).pop(self.values[0], None)
+        db.save_log_config(interaction.guild_id, config)
+        v = LevelMultiplierView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class LevelMultiplierView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        mult = ls.cfg(db.get_log_config(guild.id)).get("multipliers", {})
+        self.add_item(MultiplierRoleSelect())
+        if mult:
+            self.add_item(MultiplierRemoveSelect(guild, mult))
+        self.add_item(BackButton("levels"))
+
+    def build_embed(self) -> discord.Embed:
+        mult = ls.cfg(db.get_log_config(self.guild.id)).get("multipliers", {})
+        if mult:
+            testo = "\n".join(f"<@&{rid}> → **×{val}**" for rid, val in mult.items())
+        else:
+            testo = "*nessun multiplier*"
+        embed = discord.Embed(
+            title="✨ Multiplier",
+            description="Ruoli che danno XP extra. Se un membro ha più ruoli, vale il **moltiplicatore più alto**.",
+            color=BLU,
+        )
+        embed.add_field(name="Multiplier attivi", value=testo, inline=False)
+        return embed
+
+
+# — Blacklist XP —
+class XpBlacklistRolesSelect(discord.ui.RoleSelect):
+    def __init__(self, ids):
+        super().__init__(placeholder="Ruoli esclusi dagli XP...", min_values=0, max_values=25, row=0,
+                         default_values=_dv(ids, discord.SelectDefaultValueType.role))
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("levels", {})["blacklist_roles"] = [r.id for r in self.values]
+        db.save_log_config(interaction.guild_id, config)
+        v = LevelBlacklistView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class XpBlacklistUsersSelect(discord.ui.UserSelect):
+    def __init__(self, ids):
+        super().__init__(placeholder="Utenti esclusi dagli XP...", min_values=0, max_values=25, row=1,
+                         default_values=_dv(ids, discord.SelectDefaultValueType.user))
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("levels", {})["blacklist_users"] = [u.id for u in self.values]
+        db.save_log_config(interaction.guild_id, config)
+        v = LevelBlacklistView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class LevelBlacklistView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        c = ls.cfg(db.get_log_config(guild.id))
+        self.add_item(XpBlacklistRolesSelect(c.get("blacklist_roles", [])))
+        self.add_item(XpBlacklistUsersSelect(c.get("blacklist_users", [])))
+        self.add_item(BackButton("levels"))
+
+    def build_embed(self) -> discord.Embed:
+        c = ls.cfg(db.get_log_config(self.guild.id))
+        embed = discord.Embed(
+            title="🚫 Blacklist XP",
+            description=("Ruoli e utenti che **non** guadagnano XP.\n"
+                         "Seleziona quelli desiderati nei menu (la selezione sostituisce la lista)."),
+            color=BLU,
+        )
+        embed.add_field(name="Ruoli esclusi",
+                        value=f"{len(c.get('blacklist_roles', []))} ruoli" if c.get("blacklist_roles") else "*nessuno*",
+                        inline=True)
+        embed.add_field(name="Utenti esclusi",
+                        value=f"{len(c.get('blacklist_users', []))} utenti" if c.get("blacklist_users") else "*nessuno*",
+                        inline=True)
         return embed
 
 
