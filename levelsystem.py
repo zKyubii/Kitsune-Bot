@@ -5,18 +5,16 @@ DEFAULT = {
     "enabled": False,
     "text_enabled": True,
     "voice_enabled": True,
-    "xp_min": 15,
-    "xp_max": 25,
-    "voice_xp": 10,
+    "xp_message": 20,         # XP fissi per messaggio
+    "voice_xp": 10,           # XP per intervallo in vocale
     "cooldown_text": 60,      # secondi
     "cooldown_voice": 60,     # secondi
-    "curve_base": 100,        # XP per passare dal livello 0 al 1
-    "curve_increment": 50,    # XP in più per ogni livello successivo
-    "level_overrides": {},    # {"5": 1000} → XP per avanzare DAL livello 5
+    "curve": {},              # {"0": 100, "5": 200} → XP per salire DAL livello (manuale)
     "levelup_channel": None,
     "levelup_message": "GG {user}, hai raggiunto il **livello {level}**! 🎉",
     "blacklist_roles": [],
     "blacklist_users": [],
+    "blacklist_channels": [],
     "multipliers": {},        # {"role_id": 2.0}
     "rewards": {},            # {"5": role_id}
     "reward_replace": True,
@@ -30,14 +28,27 @@ def cfg(config: dict) -> dict:
 
 
 def cost(c: dict, level: int) -> int:
-    """XP necessari per avanzare DAL `level` al successivo."""
-    ov = c.get("level_overrides", {}).get(str(level))
-    if ov is not None:
+    """XP necessari per avanzare DAL `level` al successivo.
+
+    Curva totalmente manuale: usa il valore impostato per quel livello; se non
+    c'è, riporta quello del livello impostato più vicino sotto (carry-forward).
+    Se la curva è vuota, default 100.
+    """
+    curve = c.get("curve", {})
+    if not curve:
+        return 100
+    if str(level) in curve:
         try:
-            return max(1, int(ov))
+            return max(1, int(curve[str(level)]))
         except (ValueError, TypeError):
             pass
-    return max(1, int(c["curve_base"] + c["curve_increment"] * level))
+    keys = sorted(int(k) for k in curve)
+    below = [k for k in keys if k <= level]
+    ref = max(below) if below else min(keys)
+    try:
+        return max(1, int(curve[str(ref)]))
+    except (ValueError, TypeError):
+        return 100
 
 
 def level_info(c: dict, xp: int) -> dict:
@@ -84,6 +95,11 @@ def is_blacklisted(c: dict, user_id: int, role_ids) -> bool:
         return True
     bl = set(c.get("blacklist_roles", []))
     return any(rid in bl for rid in role_ids)
+
+
+def channel_blacklisted(c: dict, channel_id: int, category_id=None) -> bool:
+    bl = c.get("blacklist_channels", [])
+    return channel_id in bl or (category_id is not None and category_id in bl)
 
 
 _DUR_RE = re.compile(r"(\d+)\s*([smh]?)", re.IGNORECASE)

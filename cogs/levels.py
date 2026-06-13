@@ -1,5 +1,4 @@
 import time
-import random
 
 import discord
 from discord.ext import commands, tasks
@@ -93,15 +92,14 @@ class Levels(commands.Cog):
         member = message.author
         if ls.is_blacklisted(c, member.id, [r.id for r in member.roles]):
             return
+        if ls.channel_blacklisted(c, message.channel.id, getattr(message.channel, "category_id", None)):
+            return
         key = (message.guild.id, member.id)
         now = time.time()
         if now - self.text_cd.get(key, 0) < c["cooldown_text"]:
             return
         self.text_cd[key] = now
-        lo, hi = int(c["xp_min"]), int(c["xp_max"])
-        if hi < lo:
-            hi = lo
-        await self._award(member, random.randint(lo, hi), message.channel, c)
+        await self._award(member, int(c["xp_message"]), message.channel, c)
 
     # ── VOCALE ───────────────────────────────────────────────────────────────
     @tasks.loop(seconds=30)
@@ -113,6 +111,8 @@ class Levels(commands.Cog):
                 continue
             for vc in guild.voice_channels:
                 if guild.afk_channel and vc.id == guild.afk_channel.id:
+                    continue
+                if ls.channel_blacklisted(c, vc.id, vc.category_id):
                     continue
                 humans = [m for m in vc.members if not m.bot]
                 if len(humans) < 2:   # niente XP se sei da solo

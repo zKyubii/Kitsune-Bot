@@ -1345,14 +1345,13 @@ class XpCooldownModal(discord.ui.Modal, title="XP & Cooldown"):
         self.author_id = author_id
         self.guild = guild
         c = ls.cfg(db.get_log_config(guild.id))
-        self.xp_min = discord.ui.TextInput(label="XP minimi per messaggio", default=str(c["xp_min"]), max_length=6)
-        self.xp_max = discord.ui.TextInput(label="XP massimi per messaggio", default=str(c["xp_max"]), max_length=6)
+        self.xp_msg = discord.ui.TextInput(label="XP per messaggio", default=str(c["xp_message"]), max_length=6)
         self.voice_xp = discord.ui.TextInput(label="XP per intervallo in vocale", default=str(c["voice_xp"]), max_length=6)
         self.cd_text = discord.ui.TextInput(label="Cooldown chat (es. 60s, 1m)",
                                             default=ls.fmt_duration(c["cooldown_text"]), max_length=8)
         self.cd_voice = discord.ui.TextInput(label="Cooldown vocale (es. 1m, 5m)",
                                              default=ls.fmt_duration(c["cooldown_voice"]), max_length=8)
-        for it in (self.xp_min, self.xp_max, self.voice_xp, self.cd_text, self.cd_voice):
+        for it in (self.xp_msg, self.voice_xp, self.cd_text, self.cd_voice):
             self.add_item(it)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -1363,8 +1362,7 @@ class XpCooldownModal(discord.ui.Modal, title="XP & Cooldown"):
         def _i(s, d):
             s = (s or "").strip()
             return max(0, int(s)) if s.isdigit() else d
-        lv["xp_min"] = _i(self.xp_min.value, c["xp_min"])
-        lv["xp_max"] = _i(self.xp_max.value, c["xp_max"])
+        lv["xp_message"] = _i(self.xp_msg.value, c["xp_message"])
         lv["voice_xp"] = _i(self.voice_xp.value, c["voice_xp"])
         ct = ls.parse_duration(self.cd_text.value)
         cv = ls.parse_duration(self.cd_voice.value)
@@ -1429,8 +1427,8 @@ class LevelsView(BaseView):
         embed.add_field(name="Stato",
                         value=f"{sn(c['enabled'])} Sistema · {sn(c['text_enabled'])} Chat · {sn(c['voice_enabled'])} Vocale",
                         inline=False)
-        embed.add_field(name="XP messaggio", value=f"{c['xp_min']}–{c['xp_max']}", inline=True)
-        embed.add_field(name="XP vocale", value=f"{c['voice_xp']}", inline=True)
+        embed.add_field(name="XP per messaggio", value=f"{c['xp_message']}", inline=True)
+        embed.add_field(name="XP per vocale", value=f"{c['voice_xp']}", inline=True)
         embed.add_field(name="Cooldown",
                         value=f"chat {ls.fmt_duration(c['cooldown_text'])} · voce {ls.fmt_duration(c['cooldown_voice'])}",
                         inline=True)
@@ -1439,96 +1437,75 @@ class LevelsView(BaseView):
         return embed
 
 
-# — Curva XP —
-class CurveBaseModal(discord.ui.Modal, title="Curva XP"):
+# — Curva XP (manuale) —
+class CurveAddModal(discord.ui.Modal, title="Aggiungi livello"):
     def __init__(self, author_id, guild):
         super().__init__()
         self.author_id = author_id
         self.guild = guild
-        c = ls.cfg(db.get_log_config(guild.id))
-        self.base = discord.ui.TextInput(label="XP base (livello 0 → 1)", default=str(c["curve_base"]), max_length=8)
-        self.incr = discord.ui.TextInput(label="Incremento per livello", default=str(c["curve_increment"]), max_length=8)
-        self.add_item(self.base)
-        self.add_item(self.incr)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        config = db.get_log_config(interaction.guild_id)
-        c = ls.cfg(config)
-        lv = config.setdefault("levels", {})
-        lv["curve_base"] = int(self.base.value) if self.base.value.strip().isdigit() else c["curve_base"]
-        lv["curve_increment"] = int(self.incr.value) if self.incr.value.strip().isdigit() else c["curve_increment"]
-        db.save_log_config(interaction.guild_id, config)
-        v = LevelCurveView(self.author_id, self.guild)
-        await interaction.response.edit_message(embed=v.build_embed(), view=v)
-
-
-class CurveOverrideModal(discord.ui.Modal, title="Override livello"):
-    def __init__(self, author_id, guild):
-        super().__init__()
-        self.author_id = author_id
-        self.guild = guild
-        self.livello = discord.ui.TextInput(label="Livello", placeholder="es. 5", max_length=4)
-        self.xp = discord.ui.TextInput(label="XP per avanzare (vuoto = rimuovi)", required=False, max_length=8,
-                                       placeholder="es. 1000")
+        self.livello = discord.ui.TextInput(label="Livello", placeholder="es. 1", max_length=4)
+        self.xp = discord.ui.TextInput(label="XP per salire al livello successivo",
+                                       placeholder="es. 1000", max_length=9)
         self.add_item(self.livello)
         self.add_item(self.xp)
 
     async def on_submit(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
-        ov = config.setdefault("levels", {}).setdefault("level_overrides", {})
-        if self.livello.value.strip().isdigit():
-            lvl = self.livello.value.strip()
-            if self.xp.value.strip().isdigit():
-                ov[lvl] = int(self.xp.value.strip())
-            else:
-                ov.pop(lvl, None)
+        curve = config.setdefault("levels", {}).setdefault("curve", {})
+        if self.livello.value.strip().isdigit() and self.xp.value.strip().isdigit():
+            curve[self.livello.value.strip()] = int(self.xp.value.strip())
             db.save_log_config(interaction.guild_id, config)
         v = LevelCurveView(self.author_id, self.guild)
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
-class CurveBaseButton(discord.ui.Button):
+class CurveAddButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="📈 Base / Incremento", style=discord.ButtonStyle.secondary, row=0)
+        super().__init__(label="➕ Aggiungi / modifica livello", style=discord.ButtonStyle.success, row=0)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(CurveBaseModal(self.view.author_id, self.view.guild))
+        await interaction.response.send_modal(CurveAddModal(self.view.author_id, self.view.guild))
 
 
-class CurveOverrideButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="✏️ Override livello", style=discord.ButtonStyle.secondary, row=0)
+class CurveRemoveSelect(discord.ui.Select):
+    def __init__(self, curve):
+        options = []
+        for lvl, xp in sorted(curve.items(), key=lambda x: int(x[0]))[:25]:
+            options.append(discord.SelectOption(label=f"Livello {lvl} → {xp} XP"[:100], value=str(lvl)))
+        super().__init__(placeholder="🗑️ Rimuovi un livello...", options=options, row=1)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(CurveOverrideModal(self.view.author_id, self.view.guild))
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("levels", {}).setdefault("curve", {}).pop(self.values[0], None)
+        db.save_log_config(interaction.guild_id, config)
+        v = LevelCurveView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
 class LevelCurveView(BaseView):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(author_id, guild)
-        self.add_item(CurveBaseButton())
-        self.add_item(CurveOverrideButton())
+        curve = ls.cfg(db.get_log_config(guild.id)).get("curve", {})
+        self.add_item(CurveAddButton())
+        if curve:
+            self.add_item(CurveRemoveSelect(curve))
         self.add_item(BackButton("levels"))
 
     def build_embed(self) -> discord.Embed:
-        c = ls.cfg(db.get_log_config(self.guild.id))
-        # XP totali per raggiungere i primi livelli
-        righe = []
-        tot = 0
-        for lvl in range(0, 10):
-            tot += ls.cost(c, lvl)
-            righe.append(f"Lv {lvl + 1} → `{tot}` XP totali")
-        ov = c.get("level_overrides", {})
-        ov_txt = ", ".join(f"Lv{k}={v}" for k, v in sorted(ov.items(), key=lambda x: int(x[0]))) or "*nessuno*"
+        curve = ls.cfg(db.get_log_config(self.guild.id)).get("curve", {})
+        if curve:
+            righe = [f"**Livello {lvl}** → `{xp}` XP per salire"
+                     for lvl, xp in sorted(curve.items(), key=lambda x: int(x[0]))]
+            testo = "\n".join(righe)
+        else:
+            testo = "*Nessun livello impostato (default: 100 XP a livello).*"
         embed = discord.Embed(
-            title="📈 Curva XP",
-            description=(f"**Base:** {c['curve_base']} · **Incremento:** {c['curve_increment']}\n"
-                         f"Formula: XP per livello L = base + incremento × L\n\n"
-                         "Usa **Override** per fissare manualmente l'XP di un livello specifico."),
+            title="📈 Curva XP (manuale)",
+            description=("Imposti tu, livello per livello, quanti XP servono per salire al successivo.\n"
+                         "I livelli senza un valore usano quello del livello impostato più vicino sotto."),
             color=BLU,
         )
-        embed.add_field(name="Anteprima primi livelli", value="\n".join(righe), inline=False)
-        embed.add_field(name="Override", value=ov_txt, inline=False)
+        embed.add_field(name="Livelli impostati", value=testo, inline=False)
         return embed
 
 
@@ -1788,20 +1765,38 @@ class XpBlacklistUsersSelect(discord.ui.UserSelect):
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
+class XpBlacklistChannelsSelect(discord.ui.ChannelSelect):
+    def __init__(self, ids):
+        super().__init__(placeholder="Canali esclusi dagli XP (testo, vocale, categorie)...",
+                         channel_types=[discord.ChannelType.text, discord.ChannelType.voice,
+                                        discord.ChannelType.category],
+                         min_values=0, max_values=25, row=2,
+                         default_values=_dv(ids, discord.SelectDefaultValueType.channel))
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("levels", {})["blacklist_channels"] = [ch.id for ch in self.values]
+        db.save_log_config(interaction.guild_id, config)
+        v = LevelBlacklistView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
 class LevelBlacklistView(BaseView):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(author_id, guild)
         c = ls.cfg(db.get_log_config(guild.id))
         self.add_item(XpBlacklistRolesSelect(c.get("blacklist_roles", [])))
         self.add_item(XpBlacklistUsersSelect(c.get("blacklist_users", [])))
+        self.add_item(XpBlacklistChannelsSelect(c.get("blacklist_channels", [])))
         self.add_item(BackButton("levels"))
 
     def build_embed(self) -> discord.Embed:
         c = ls.cfg(db.get_log_config(self.guild.id))
         embed = discord.Embed(
             title="🚫 Blacklist XP",
-            description=("Ruoli e utenti che **non** guadagnano XP.\n"
-                         "Seleziona quelli desiderati nei menu (la selezione sostituisce la lista)."),
+            description=("Ruoli, utenti e canali che **non** danno XP.\n"
+                         "Seleziona quelli desiderati nei menu (la selezione sostituisce la lista).\n"
+                         "Per i canali puoi scegliere anche una **categoria** intera."),
             color=BLU,
         )
         embed.add_field(name="Ruoli esclusi",
@@ -1809,6 +1804,9 @@ class LevelBlacklistView(BaseView):
                         inline=True)
         embed.add_field(name="Utenti esclusi",
                         value=f"{len(c.get('blacklist_users', []))} utenti" if c.get("blacklist_users") else "*nessuno*",
+                        inline=True)
+        embed.add_field(name="Canali esclusi",
+                        value=f"{len(c.get('blacklist_channels', []))} canali" if c.get("blacklist_channels") else "*nessuno*",
                         inline=True)
         return embed
 
