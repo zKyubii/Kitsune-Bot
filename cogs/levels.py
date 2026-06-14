@@ -49,11 +49,14 @@ class Levels(commands.Cog):
 
         titolo = fmt(c.get("levelup_title"))
         corpo = fmt(c.get("levelup_message"))
-        embed = discord.Embed(
-            title=titolo or None,
-            description=corpo or None,
-            color=member.color if member.color.value else 0xF1C40F,
-        )
+        colore = member.color if member.color.value else discord.Color(0xF1C40F)
+        custom = (c.get("levelup_color") or "").strip().lstrip("#")
+        if custom:
+            try:
+                colore = discord.Color(int(custom, 16))
+            except ValueError:
+                pass
+        embed = discord.Embed(title=titolo or None, description=corpo or None, color=colore)
         embed.set_thumbnail(url=member.display_avatar.url)
         embed.set_footer(text=member.guild.name,
                          icon_url=member.guild.icon.url if member.guild.icon else None)
@@ -193,10 +196,12 @@ class Levels(commands.Cog):
         lines = []
         for i, r in enumerate(rows):
             info = ls.level_info(c, r["xp"])
-            pos = medals.get(i, f"**#{i + 1}**")
-            lines.append(f"{pos} <@{r['user_id']}> — Livello **{info['level']}** · Exp `{r['xp']}/{info['next_total']}`")
-        embed = discord.Embed(title=f"🏆 Leaderboard — {interaction.guild.name}",
-                              color=BLU, description="\n".join(lines))
+            pos = medals.get(i, f"`#{i + 1}`")
+            lines.append(f"{pos} <@{r['user_id']}>\n　**Level:** `{info['level']}`　**Exp:** `{r['xp']}/{info['next_total']}`")
+        embed = discord.Embed(title=f"🏆 {interaction.guild.name} — Leaderboard",
+                              color=BLU, description="\n\n".join(lines))
+        if interaction.guild.icon:
+            embed.set_thumbnail(url=interaction.guild.icon.url)
         await interaction.response.send_message(embed=embed)
 
     # ── /level (admin) ───────────────────────────────────────────────────────

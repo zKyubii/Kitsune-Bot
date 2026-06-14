@@ -13,6 +13,7 @@ DEFAULT = {
     "levelup_channel": None,
     "levelup_title": "{user_name} leveled up!",
     "levelup_message": "CONGRATS\nSei salito al **livello {level}**! 🎉",
+    "levelup_color": "",      # hex (es. F1C40F) o vuoto = automatico (colore del ruolo)
     "blacklist_roles": [],
     "blacklist_users": [],
     "blacklist_channels": [],

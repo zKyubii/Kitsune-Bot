@@ -1598,14 +1598,19 @@ class LevelUpMessageModal(discord.ui.Modal, title="Embed level-up"):
         self.msg = discord.ui.TextInput(
             label="Testo", style=discord.TextStyle.paragraph, max_length=1500, required=False,
             default=c["levelup_message"], placeholder="CONGRATS\nSei al livello {level}!")
+        self.colore = discord.ui.TextInput(
+            label="Colore embed (hex, vuoto = automatico)", max_length=7, required=False,
+            default=c["levelup_color"], placeholder="es. F1C40F")
         self.add_item(self.titolo)
         self.add_item(self.msg)
+        self.add_item(self.colore)
 
     async def on_submit(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
         lv = config.setdefault("levels", {})
         lv["levelup_title"] = self.titolo.value
         lv["levelup_message"] = self.msg.value
+        lv["levelup_color"] = self.colore.value.strip().lstrip("#")
         db.save_log_config(interaction.guild_id, config)
         v = LevelUpView(self.author_id, self.guild)
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
@@ -1640,6 +1645,7 @@ class LevelUpView(BaseView):
         embed.add_field(name="📍 Canale", value=dove, inline=False)
         embed.add_field(name="🔤 Titolo", value=f"```{(c['levelup_title'] or '—')[:250]}```", inline=False)
         embed.add_field(name="💬 Testo", value=f"```{(c['levelup_message'] or '—')[:500]}```", inline=False)
+        embed.add_field(name="🎨 Colore", value=f"`#{c['levelup_color']}`" if c['levelup_color'] else "Automatico (colore ruolo)", inline=False)
         return embed
 
 

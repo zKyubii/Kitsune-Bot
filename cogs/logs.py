@@ -275,6 +275,18 @@ class Logs(commands.Cog):
                          [f"**Total boosts:** {guild.premium_subscription_count}"], user=after)
                 await self._send(guild, "server", "boost", e, copy_id=after.id)
 
+    @commands.Cog.listener()
+    async def on_user_update(self, before, after):
+        """Cambio avatar del PROFILO PRINCIPALE (globale): lo logga in ogni server condiviso."""
+        if before.avatar == after.avatar:
+            return
+        for guild in self.bot.guilds:
+            if not guild.get_member(after.id):
+                continue
+            e = _emb(ORANGE, "🖼️ Profile Avatar Changed", after.mention, user=after)
+            e.set_thumbnail(url=after.display_avatar.url)
+            await self._send(guild, "members", "avatar", e, copy_id=after.id)
+
     # ── MESSAGES ─────────────────────────────────────────────────────────────
     async def _deleter(self, message):
         actor, _ = await self._actor(message.guild, discord.AuditLogAction.message_delete, message.author.id)
