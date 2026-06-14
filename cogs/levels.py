@@ -42,11 +42,24 @@ class Levels(commands.Cog):
         ch = member.guild.get_channel(c.get("levelup_channel")) if c.get("levelup_channel") else fallback_channel
         if not ch:
             return
-        msg = (c.get("levelup_message") or "").replace("{user}", member.mention) \
-            .replace("{user_name}", member.name).replace("{level}", str(level)) \
-            .replace("{server}", member.guild.name)
+
+        def fmt(t):
+            return (t or "").replace("{user}", member.mention).replace("{user_name}", member.name) \
+                .replace("{level}", str(level)).replace("{server}", member.guild.name)
+
+        titolo = fmt(c.get("levelup_title"))
+        corpo = fmt(c.get("levelup_message"))
+        embed = discord.Embed(
+            title=titolo or None,
+            description=corpo or None,
+            color=member.color if member.color.value else 0xF1C40F,
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        embed.set_footer(text=member.guild.name,
+                         icon_url=member.guild.icon.url if member.guild.icon else None)
         try:
-            await ch.send(msg, allowed_mentions=discord.AllowedMentions(users=True))
+            await ch.send(content=member.mention, embed=embed,
+                          allowed_mentions=discord.AllowedMentions(users=True))
         except discord.HTTPException:
             pass
 

@@ -11,7 +11,8 @@ DEFAULT = {
     "cooldown_voice": 60,     # secondi
     "curve": {},              # {"0": 100, "5": 200} → XP per salire DAL livello (manuale)
     "levelup_channel": None,
-    "levelup_message": "GG {user}, hai raggiunto il **livello {level}**! 🎉",
+    "levelup_title": "{user_name} leveled up!",
+    "levelup_message": "CONGRATS\nSei salito al **livello {level}**! 🎉",
     "blacklist_roles": [],
     "blacklist_users": [],
     "blacklist_channels": [],

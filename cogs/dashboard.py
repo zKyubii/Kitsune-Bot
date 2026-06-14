@@ -1586,21 +1586,26 @@ class LevelUpResetButton(discord.ui.Button):
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
-class LevelUpMessageModal(discord.ui.Modal, title="Messaggio level-up"):
+class LevelUpMessageModal(discord.ui.Modal, title="Embed level-up"):
     def __init__(self, author_id, guild):
         super().__init__()
         self.author_id = author_id
         self.guild = guild
         c = ls.cfg(db.get_log_config(guild.id))
+        self.titolo = discord.ui.TextInput(
+            label="Titolo", max_length=256, required=False,
+            default=c["levelup_title"], placeholder="{user_name} leveled up!")
         self.msg = discord.ui.TextInput(
-            label="Messaggio", style=discord.TextStyle.paragraph, max_length=1500,
-            default=c["levelup_message"],
-            placeholder="GG {user}, sei al livello {level}!")
+            label="Testo", style=discord.TextStyle.paragraph, max_length=1500, required=False,
+            default=c["levelup_message"], placeholder="CONGRATS\nSei al livello {level}!")
+        self.add_item(self.titolo)
         self.add_item(self.msg)
 
     async def on_submit(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
-        config.setdefault("levels", {})["levelup_message"] = self.msg.value
+        lv = config.setdefault("levels", {})
+        lv["levelup_title"] = self.titolo.value
+        lv["levelup_message"] = self.msg.value
         db.save_log_config(interaction.guild_id, config)
         v = LevelUpView(self.author_id, self.guild)
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
@@ -1608,7 +1613,7 @@ class LevelUpMessageModal(discord.ui.Modal, title="Messaggio level-up"):
 
 class LevelUpMessageButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="✏️ Messaggio", style=discord.ButtonStyle.secondary, row=1)
+        super().__init__(label="✏️ Titolo & Testo", style=discord.ButtonStyle.secondary, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(LevelUpMessageModal(self.view.author_id, self.view.guild))
@@ -1627,13 +1632,14 @@ class LevelUpView(BaseView):
         ch = self.guild.get_channel(c["levelup_channel"]) if c["levelup_channel"] else None
         dove = ch.mention if ch else "Nel canale dove l'utente ha scritto"
         embed = discord.Embed(
-            title="🎉 Messaggio di level-up",
-            description=("Messaggio inviato quando un utente sale di livello.\n"
+            title="🎉 Embed di level-up",
+            description=("Embed inviato quando un utente sale di livello (mostra l'avatar dell'utente).\n"
                          "**Variabili:** `{user}` `{user_name}` `{level}` `{server}`"),
             color=BLU,
         )
         embed.add_field(name="📍 Canale", value=dove, inline=False)
-        embed.add_field(name="💬 Messaggio", value=f"```{c['levelup_message'][:500]}```", inline=False)
+        embed.add_field(name="🔤 Titolo", value=f"```{(c['levelup_title'] or '—')[:250]}```", inline=False)
+        embed.add_field(name="💬 Testo", value=f"```{(c['levelup_message'] or '—')[:500]}```", inline=False)
         return embed
 
 
