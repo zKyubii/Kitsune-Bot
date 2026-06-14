@@ -1467,6 +1467,52 @@ class CurveAddButton(discord.ui.Button):
         await interaction.response.send_modal(CurveAddModal(self.view.author_id, self.view.guild))
 
 
+class CurveBulkModal(discord.ui.Modal, title="Import curva in blocco"):
+    def __init__(self, author_id, guild):
+        super().__init__()
+        self.author_id = author_id
+        self.guild = guild
+        self.testo = discord.ui.TextInput(
+            label="XP per livello, in ordine dal livello 0",
+            style=discord.TextStyle.paragraph, max_length=4000,
+            placeholder="46, 64, 84, 106, 130, ...  (un numero per livello)")
+        self.add_item(self.testo)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        nums = []
+        for tok in self.testo.value.replace(",", " ").replace(";", " ").split():
+            t = tok.strip()
+            if t.isdigit():
+                nums.append(int(t))
+        if nums:
+            curve = {str(i): n for i, n in enumerate(nums) if n > 0}
+            config = db.get_log_config(interaction.guild_id)
+            config.setdefault("levels", {})["curve"] = curve
+            db.save_log_config(interaction.guild_id, config)
+        v = LevelCurveView(self.author_id, self.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class CurveBulkButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="📋 Import in blocco", style=discord.ButtonStyle.primary, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(CurveBulkModal(self.view.author_id, self.view.guild))
+
+
+class CurveClearButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="🧹 Svuota curva", style=discord.ButtonStyle.danger, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("levels", {})["curve"] = {}
+        db.save_log_config(interaction.guild_id, config)
+        v = LevelCurveView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
 class CurveRemoveSelect(discord.ui.Select):
     def __init__(self, curve):
         options = []
@@ -1487,25 +1533,30 @@ class LevelCurveView(BaseView):
         super().__init__(author_id, guild)
         curve = ls.cfg(db.get_log_config(guild.id)).get("curve", {})
         self.add_item(CurveAddButton())
+        self.add_item(CurveBulkButton())
         if curve:
             self.add_item(CurveRemoveSelect(curve))
+            self.add_item(CurveClearButton())
         self.add_item(BackButton("levels"))
 
     def build_embed(self) -> discord.Embed:
         curve = ls.cfg(db.get_log_config(self.guild.id)).get("curve", {})
-        if curve:
-            righe = [f"**Livello {lvl}** → `{xp}` XP per salire"
-                     for lvl, xp in sorted(curve.items(), key=lambda x: int(x[0]))]
-            testo = "\n".join(righe)
-        else:
+        items = sorted(curve.items(), key=lambda x: int(x[0]))
+        if not items:
             testo = "*Nessun livello impostato (default: 100 XP a livello).*"
+        elif len(items) <= 12:
+            testo = "\n".join(f"**Lv {lvl}** → `{xp}` XP per salire" for lvl, xp in items)
+        else:
+            head = "\n".join(f"**Lv {lvl}** → `{xp}`" for lvl, xp in items[:8])
+            testo = f"{head}\n… e altri **{len(items) - 8}** livelli impostati"
         embed = discord.Embed(
             title="📈 Curva XP (manuale)",
             description=("Imposti tu, livello per livello, quanti XP servono per salire al successivo.\n"
-                         "I livelli senza un valore usano quello del livello impostato più vicino sotto."),
+                         "**Import in blocco**: incolli tutti i valori in un colpo (dal livello 0).\n"
+                         "I livelli senza valore usano quello del livello impostato più vicino sotto."),
             color=BLU,
         )
-        embed.add_field(name="Livelli impostati", value=testo, inline=False)
+        embed.add_field(name=f"Livelli impostati ({len(items)})", value=testo, inline=False)
         return embed
 
 
