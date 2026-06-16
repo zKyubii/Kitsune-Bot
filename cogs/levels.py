@@ -8,13 +8,15 @@ import database as db
 import levelsystem as ls
 
 BLU = 0x5865F2
+DEAF_GRACE = 600  # secondi di tolleranza in cuffia (full mute) prima di smettere di dare XP
 
 
 class Levels(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.text_cd = {}   # (guild_id, user_id) -> last unix ts (chat)
-        self.voice_cd = {}  # (guild_id, user_id) -> last unix ts (vocale)
+        self.text_cd = {}    # (guild_id, user_id) -> last unix ts (chat)
+        self.voice_cd = {}   # (guild_id, user_id) -> last unix ts (vocale)
+        self.deaf_since = {}  # (guild_id, user_id) -> unix ts da quando è "full mute" (deafened)
         self.voice_loop.start()
 
     def cog_unload(self):
@@ -135,11 +137,21 @@ class Levels(commands.Cog):
                     continue
                 for member in humans:
                     vs = member.voice
-                    if not vs or vs.self_deaf or vs.deaf or vs.afk:
-                        continue
-                    if ls.is_blacklisted(c, member.id, [r.id for r in member.roles]):
+                    if not vs or vs.afk:
                         continue
                     key = (guild.id, member.id)
+                    # Full mute (in cuffia / deafened): tolleranza, poi stop XP dopo DEAF_GRACE.
+                    # Il solo mic mutato NON conta come full mute: continua a dare XP.
+                    if vs.self_deaf or vs.deaf:
+                        since = self.deaf_since.get(key)
+                        if since is None:
+                            self.deaf_since[key] = now
+                        elif now - since >= DEAF_GRACE:
+                            continue
+                    else:
+                        self.deaf_since.pop(key, None)
+                    if ls.is_blacklisted(c, member.id, [r.id for r in member.roles]):
+                        continue
                     if now - self.voice_cd.get(key, 0) < c["cooldown_voice"]:
                         continue
                     self.voice_cd[key] = now
