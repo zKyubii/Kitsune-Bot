@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 
 import database as db
-from cogs.embedbuilder import costruisci_embed
+from cogs.embedbuilder import costruisci_embed, _replace
 
 
 class Greetings(commands.Cog):
@@ -29,40 +29,49 @@ class Greetings(commands.Cog):
         data = db.get_embed(guild.id, name)
         if data is None:
             return False, f"❌ L'embed `{name}` non esiste più. Riconfigura con `/set {tipo}`."
+        msg = conf.get("message")
+        content = _replace(msg, member, guild) if msg else member.mention
         try:
-            await ch.send(content=member.mention, embed=costruisci_embed(data, member=member, guild=guild))
+            await ch.send(content=content, embed=costruisci_embed(data, member=member, guild=guild),
+                          allowed_mentions=discord.AllowedMentions(users=True, roles=True, everyone=False))
         except discord.HTTPException as e:
             return False, f"❌ Errore durante l'invio: {e}"
         return True, f"✅ Messaggio inviato in {ch.mention}."
 
     # ── SET ─────────────────────────────────────────────────────────────────────
     @set_group.command(name="greet", description="Imposta il canale e l'embed di benvenuto")
-    @app_commands.describe(canale="Canale dove inviare il benvenuto", embed="Nome dell'embed da usare")
+    @app_commands.describe(canale="Canale dove inviare il benvenuto", embed="Nome dell'embed da usare",
+                           messaggio="Testo sopra l'embed (puoi taggare utente/staff e usare emoji)")
     @app_commands.checks.has_permissions(manage_guild=True)
-    async def set_greet(self, interaction: discord.Interaction, canale: discord.TextChannel, embed: str):
+    async def set_greet(self, interaction: discord.Interaction, canale: discord.TextChannel, embed: str,
+                        messaggio: str = None):
         if db.get_embed(interaction.guild_id, embed) is None:
             await interaction.response.send_message(
                 f"❌ L'embed `{embed}` non esiste. Crealo con `/embed create`.", ephemeral=True)
             return
         config = db.get_log_config(interaction.guild_id)
-        config["greet"] = {"channel": canale.id, "embed": embed}
+        config["greet"] = {"channel": canale.id, "embed": embed, "message": messaggio}
         db.save_log_config(interaction.guild_id, config)
+        extra = f"\nMessaggio: {messaggio}" if messaggio else ""
         await interaction.response.send_message(
-            f"✅ Benvenuto impostato in {canale.mention} con l'embed `{embed}`.", ephemeral=True)
+            f"✅ Benvenuto impostato in {canale.mention} con l'embed `{embed}`.{extra}", ephemeral=True)
 
     @set_group.command(name="boost", description="Imposta il canale e l'embed per i boost")
-    @app_commands.describe(canale="Canale dove inviare il messaggio di boost", embed="Nome dell'embed da usare")
+    @app_commands.describe(canale="Canale dove inviare il messaggio di boost", embed="Nome dell'embed da usare",
+                           messaggio="Testo sopra l'embed (puoi taggare utente/staff e usare emoji)")
     @app_commands.checks.has_permissions(manage_guild=True)
-    async def set_boost(self, interaction: discord.Interaction, canale: discord.TextChannel, embed: str):
+    async def set_boost(self, interaction: discord.Interaction, canale: discord.TextChannel, embed: str,
+                        messaggio: str = None):
         if db.get_embed(interaction.guild_id, embed) is None:
             await interaction.response.send_message(
                 f"❌ L'embed `{embed}` non esiste. Crealo con `/embed create`.", ephemeral=True)
             return
         config = db.get_log_config(interaction.guild_id)
-        config["boost"] = {"channel": canale.id, "embed": embed}
+        config["boost"] = {"channel": canale.id, "embed": embed, "message": messaggio}
         db.save_log_config(interaction.guild_id, config)
+        extra = f"\nMessaggio: {messaggio}" if messaggio else ""
         await interaction.response.send_message(
-            f"✅ Messaggio di boost impostato in {canale.mention} con l'embed `{embed}`.", ephemeral=True)
+            f"✅ Messaggio di boost impostato in {canale.mention} con l'embed `{embed}`.{extra}", ephemeral=True)
 
     @set_greet.autocomplete("embed")
     @set_boost.autocomplete("embed")
