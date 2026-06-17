@@ -10,7 +10,7 @@ import logconfig
 from cogs.fun import _segmenta, _render_emoji
 
 W, H = 1000, 500
-TRIGGER = ("?quote", "!quote")
+TRIGGER = ("+quote", "?quote")
 
 # Font disponibili: chiave -> (nome mostrato, file normale, file bold)
 FONTS = {

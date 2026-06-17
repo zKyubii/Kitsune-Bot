@@ -77,7 +77,8 @@ class Logs(commands.Cog):
         self.bot.add_dynamic_items(CopyIdButton)
 
     # ── UTILITY ─────────────────────────────────────────────────────────────
-    async def _send(self, guild, category, event, embed, source_channel_id=None, copy_id=None, files=None):
+    async def _send(self, guild, category, event, embed, source_channel_id=None, copy_id=None,
+                    files=None, embeds=None):
         if guild is None:
             return
         config = db.get_log_config(guild.id)
@@ -112,8 +113,9 @@ class Logs(commands.Cog):
         if copy_id:
             view = discord.ui.View(timeout=None)
             view.add_item(CopyIdButton(copy_id))
+        all_embeds = [embed] + list(embeds or [])
         try:
-            await ch.send(embed=embed, view=view, files=files or [])
+            await ch.send(embeds=all_embeds[:10], view=view, files=files or [])
         except discord.HTTPException:
             pass
 
@@ -262,7 +264,12 @@ class Logs(commands.Cog):
                 e = _emb(GOLD, "⏱️ Timeout Applied", after.mention,
                          [f"**Expires:** {discord.utils.format_dt(a_to, 'R')}", f"**By:** {by}"], user=after)
             else:
-                e = _emb(GREEN, "✅ Timeout Removed", after.mention, user=after)
+                actor, _ = await self._actor(guild, discord.AuditLogAction.member_update, after.id)
+                if actor and actor.id != after.id:
+                    rest = [f"**Removed by:** {actor.mention}"]
+                else:
+                    rest = ["*Scaduto automaticamente*"]
+                e = _emb(GREEN, "✅ Timeout Removed", after.mention, rest, user=after)
             await self._send(guild, "modlogs", "timeout", e, copy_id=after.id)
 
         if before.premium_since != after.premium_since:
@@ -303,10 +310,19 @@ class Logs(commands.Cog):
         rest = [f"**Channel:** {message.channel.mention}", f"**Deleted by:** {chi}"]
         if message.content:
             rest.append(f"**Content:**\n{message.content[:1500]}")
+        if message.stickers:
+            nomi = ", ".join(f"[{s.name}]({s.url})" for s in message.stickers)
+            rest.append(f"**Stickers:** {nomi}")
+        if message.embeds:
+            rest.append(f"**Embed:** {len(message.embeds)} (riportati qui sotto)")
+        if not message.content and not message.attachments and not message.stickers and not message.embeds:
+            rest.append("*(messaggio senza contenuto recuperabile)*")
         e = _emb(RED, "🗑️ Message Deleted", f"**Author:** {message.author.mention}", rest,
                  user=message.author)
+        # Riporta anche gli embed originali del messaggio (preview link, embed dei bot, ecc.)
         await self._send(message.guild, "messages", "delete", e,
-                         source_channel_id=message.channel.id, copy_id=message.author.id)
+                         source_channel_id=message.channel.id, copy_id=message.author.id,
+                         embeds=message.embeds[:9])
 
         if message.attachments:
             files = []
@@ -337,7 +353,11 @@ class Logs(commands.Cog):
             content = m.content or "[no text content]"
             extra = ""
             if m.attachments:
-                extra = "\n" + "\n".join(f"[attachment] {a.url}" for a in m.attachments)
+                extra += "\n" + "\n".join(f"[attachment] {a.url}" for a in m.attachments)
+            if m.stickers:
+                extra += "\n" + "\n".join(f"[sticker] {s.name} {s.url}" for s in m.stickers)
+            if m.embeds:
+                extra += f"\n[embed] {len(m.embeds)} embed nel messaggio"
             lines.append(f"{author} @ {ts}:\n{content}{extra}\n")
         full_text = "\n".join(lines)
         buf = io.BytesIO(full_text.encode("utf-8"))

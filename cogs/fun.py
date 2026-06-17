@@ -1,6 +1,5 @@
 import discord
 from discord.ext import commands
-from discord import app_commands
 import random
 import asyncio
 import io
@@ -8,6 +7,7 @@ import os
 import math
 import datetime
 import unicodedata
+import aiohttp
 from PIL import Image, ImageDraw, ImageFont
 
 import database as db
@@ -18,6 +18,9 @@ W, H = 800, 450
 
 # Se metti un'immagine qui, verrà usata come sfondo al posto di quello generato
 SFONDO_PERSONALIZZATO = os.path.join(os.path.dirname(__file__), "..", "assets", "ship_bg.png")
+
+# Cache su disco delle emoji Twemoji (stesse di Discord)
+_EMOJI_DIR = os.path.join(os.path.dirname(__file__), "..", "assets", "emoji_cache")
 
 
 # Percorsi font candidati (Windows + Linux) — usa il primo disponibile
@@ -130,17 +133,23 @@ def _segmenta(testo: str):
 
 
 def _testo_centrato(canvas: Image.Image, cx: int, cy: int, testo: str, size: int,
-                    fill, stroke_fill=(0, 0, 0), stroke_width=2, bold=True):
-    """Disegna testo + emoji a colori (scalate correttamente), centrato su (cx, cy)."""
+                    fill, emoji_imgs=None, shadow=True, bold=True):
+    """Disegna testo + emoji a colori, centrato su (cx, cy).
+
+    Niente contorno nero: solo un'ombra morbida per la leggibilità (stile ZeroTwo).
+    Se `emoji_imgs` contiene il segmento emoji, usa la Twemoji (uguale a Discord).
+    """
     draw = ImageDraw.Draw(canvas)
     normale = _font(size, bold=bold)
     target_h = int(size * 0.9)
+    emoji_imgs = emoji_imgs or {}
 
     parti = []  # (tipo, contenuto, larghezza)
     totale = 0
     for s, e in _segmenta(testo):
         if e:
-            img = _render_emoji(s, target_h)
+            tw = emoji_imgs.get(s)
+            img = tw.resize((target_h, target_h), Image.LANCZOS) if tw is not None else _render_emoji(s, target_h)
             if img:
                 parti.append(("emoji", img, img.width))
                 totale += img.width
@@ -154,8 +163,9 @@ def _testo_centrato(canvas: Image.Image, cx: int, cy: int, testo: str, size: int
         if tipo == "emoji":
             canvas.alpha_composite(cont, (int(x), int(cy - cont.height / 2)))
         else:
-            draw.text((x, cy), cont, font=normale, anchor="lm", fill=fill,
-                      stroke_width=stroke_width, stroke_fill=stroke_fill)
+            if shadow:
+                draw.text((x + 2, cy + 2), cont, font=normale, anchor="lm", fill=(0, 0, 0))
+            draw.text((x, cy), cont, font=normale, anchor="lm", fill=fill)
         x += w
 
 
@@ -308,7 +318,51 @@ def _draw_heart(draw: ImageDraw.ImageDraw, cx: float, cy: float, larghezza: floa
     draw.polygon(punti, fill=color)
 
 
-def _crea_immagine(av1_bytes: bytes, av2_bytes: bytes, perc: int, name1: str, name2: str) -> io.BytesIO:
+async def _fetch_twemoji(session, emoji: str):
+    """Scarica (e mette in cache) la Twemoji per un segmento emoji. None se fallisce."""
+    name = "-".join(f"{ord(c):x}" for c in emoji if ord(c) != 0xFE0F)
+    if not name:
+        return None
+    try:
+        os.makedirs(_EMOJI_DIR, exist_ok=True)
+        path = os.path.join(_EMOJI_DIR, f"{name}.png")
+        if os.path.exists(path):
+            return Image.open(path).convert("RGBA")
+        url = f"https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/72x72/{name}.png"
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as r:
+            if r.status != 200:
+                return None
+            data = await r.read()
+        with open(path, "wb") as f:
+            f.write(data)
+        return Image.open(io.BytesIO(data)).convert("RGBA")
+    except Exception:
+        return None
+
+
+async def _prefetch_emoji(*names):
+    """Pre-scarica le Twemoji presenti nei nomi (così il rendering nel thread è sincrono)."""
+    segs = set()
+    for n in names:
+        for s, e in _segmenta(_normalizza_nome(n)):
+            if e:
+                segs.add(s)
+    imgs = {}
+    if not segs:
+        return imgs
+    try:
+        async with aiohttp.ClientSession() as session:
+            for s in segs:
+                img = await _fetch_twemoji(session, s)
+                if img:
+                    imgs[s] = img
+    except Exception:
+        pass
+    return imgs
+
+
+def _crea_immagine(av1_bytes: bytes, av2_bytes: bytes, perc: int, name1: str, name2: str,
+                   emoji_imgs=None) -> io.BytesIO:
     name1 = _normalizza_nome(name1)
     name2 = _normalizza_nome(name2)
     canvas = _genera_sfondo()
@@ -318,7 +372,7 @@ def _crea_immagine(av1_bytes: bytes, av2_bytes: bytes, perc: int, name1: str, na
     av2 = Image.open(io.BytesIO(av2_bytes)).convert("RGBA").resize((190, 190))
 
     box = 190
-    bordo = 6
+    bordo = 3
     y = (H - box) // 2
     x1 = 110
     x2 = W - 110 - box
@@ -327,9 +381,9 @@ def _crea_immagine(av1_bytes: bytes, av2_bytes: bytes, perc: int, name1: str, na
         draw.rectangle([ax - bordo, y - bordo, ax + box + bordo, y + box + bordo], fill=ROSA)
         canvas.paste(av, (ax, y), av)
 
-    # Nomi (con emoji a colori)
-    _testo_centrato(canvas, int(x1 + box / 2), int(y + box + 30), name1[:20], 30, ROSA)
-    _testo_centrato(canvas, int(x2 + box / 2), int(y - 30), name2[:20], 30, ROSA)
+    # Nomi: rosa, puliti, senza contorno nero (solo ombra leggera) — stile ZeroTwo
+    _testo_centrato(canvas, int(x1 + box / 2), int(y + box + 30), name1[:20], 30, ROSA, emoji_imgs)
+    _testo_centrato(canvas, int(x2 + box / 2), int(y - 30), name2[:20], 30, ROSA, emoji_imgs)
 
     # Cuore centrale con percentuale
     cx, cy = W // 2, H // 2
@@ -411,29 +465,21 @@ class Fun(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def cog_app_command_error(self, interaction, error):
-        if isinstance(error, logconfig.FeatureDisabled):
-            msg = "🚫 La funzione Fun è disattivata su questo server."
-        else:
-            msg = f"❌ Errore: {error}"
-        if interaction.response.is_done():
-            await interaction.followup.send(msg, ephemeral=True)
-        else:
-            await interaction.response.send_message(msg, ephemeral=True)
+    async def cog_check(self, ctx: commands.Context) -> bool:
+        if ctx.guild is None:
+            return False
+        if not logconfig.feature_enabled(db.get_log_config(ctx.guild.id), "fun"):
+            await ctx.send("🚫 Questa funzione non è disponibile al momento su questo server.")
+            return False
+        return True
 
     # ── SHIP ──────────────────────────────────────────────────────────────────
-    @app_commands.command(name="ship", description="Calcola la compatibilità amorosa tra due persone")
-    @app_commands.describe(
-        utente1="La prima persona",
-        utente2="(Opzionale) La seconda persona — se vuoto, sei tu",
-    )
-    @logconfig.feature_check("fun")
-    async def ship(self, interaction: discord.Interaction, utente1: discord.Member,
+    @commands.command(name="ship")
+    async def ship(self, ctx: commands.Context, utente1: discord.Member,
                    utente2: discord.Member = None):
         if utente2 is None:
-            utente2 = interaction.user
-
-        await interaction.response.defer()
+            utente2 = ctx.author
+        await ctx.typing()
 
         # Percentuale deterministica per coppia E per giorno: cambia ogni notte a mezzanotte
         coppia = tuple(sorted([utente1.id, utente2.id]))
@@ -441,75 +487,72 @@ class Fun(commands.Cog):
         rng = random.Random(hash((coppia, giorno.isoformat())))
         perc = rng.randint(0, 100)
 
-        # Frasi random in stile ZeroTwo (con le menzioni). {a} e {b} = i due utenti
+        # Frasi varie: i nomi non sono sempre all'inizio. {a} e {b} = i due utenti
         if perc < 20:
             frasi = [
-                "Ahia... {a} & {b}, sarà un disastro 💀",
-                "Rischioso, {a} & {b}, non ci scommetterei 😬",
-                "Ehm, {a} & {b}, forse è meglio lasciar perdere 🙈",
-                "{a} & {b}, le stelle dicono: scappate 🏃💨",
+                "Ahia, le stelle dicono di scappare 🏃💨 {a} e {b} proprio no.",
+                "Mi dispiace {a}, ma {b} non fa per te 💀",
+                "Zero scintille tra {a} e {b}... meglio restare amici 🙈",
+                "Diciamo che {a} e {b} hanno gusti molto diversi 😬",
             ]
         elif perc < 40:
             frasi = [
-                "Mmh, {a} & {b}, potrebbe andare peggio 😅",
-                "{a} & {b}, c'è qualcosina ma non troppo 🤏",
-                "{a} & {b}, servirebbe un piccolo miracolo ✨",
-                "{a} & {b}, partite con calma 🐌",
+                "C'è speranza per {a} e {b}, continuate a provarci 💪",
+                "Qualcosina tra {a} e {b} c'è, ma serve lavorarci 🤏",
+                "Con un piccolo miracolo, {a} potrebbe conquistare {b} ✨",
+                "Non malissimo {a}... dai una chance a {b} 🤔",
             ]
         elif perc < 60:
             frasi = [
-                "{a} & {b}, potrebbe funzionare, chi lo sa 🤔",
-                "Non male, {a} & {b}! C'è del potenziale 🙂",
-                "{a} & {b}, siete a metà strada 💗",
-                "{a} & {b}, qualche scintilla si vede 👀",
+                "A metà strada: {a} e {b}, chi lo sa come va a finire 💗",
+                "Qualche scintilla tra {a} e {b} si vede eccome 👀",
+                "Occhio, tra {a} e {b} potrebbe nascere qualcosa 🙂",
+                "Né caldo né freddo, ma {a} e {b} hanno del potenziale 🔥",
             ]
         elif perc < 80:
             frasi = [
-                "{a} & {b}, ci siamo quasi! 💕",
-                "Carini insieme, {a} & {b} 🥰",
-                "{a} & {b}, l'amore è nell'aria 🌸",
-                "{a} & {b}, bella coppia davvero 💘",
+                "L'amore è nell'aria per {a} e {b} 🌸",
+                "Bella intesa! {a} e {b} ci siamo quasi 💕",
+                "Diciamocelo, {a} e {b} sono carini insieme 🥰",
+                "Occhi a cuore: {a} e {b} fanno una bella coppia 💘",
             ]
         elif perc < 95:
             frasi = [
-                "{a} & {b}, siete fatti l'uno per l'altro 💞",
-                "Sono sorpreso che non siate ancora sposati! {a} & {b} 💍",
-                "{a} & {b}, una coppia da favola 🏰",
-                "{a} & {b}, anime gemelle 🫶",
+                "Ma come fate a non esservi ancora sposati, {a} e {b}? 💍",
+                "Sembrano fatti l'uno per l'altro: {a} e {b} 💞",
+                "Anime gemelle, {a} e {b} 🫶",
+                "Una coppia da favola: {a} e {b} 🏰",
             ]
         else:
             frasi = [
-                "Matrimonio in vista! {a} & {b} 💍🔥",
-                "{a} & {b}, amore eterno scritto nelle stelle ⭐",
-                "{a} & {b}, inseparabili per sempre ♾️❤️",
-                "{a} & {b}, l'universo vi ha uniti 🌌",
+                "Matrimonio in vista per {a} e {b}! 💍🔥",
+                "L'universo ha unito {a} e {b}, è destino ❤️🌌",
+                "Amore eterno scritto nelle stelle per {a} e {b} ⭐",
+                "Inseparabili per sempre: {a} e {b} ♾️",
             ]
         commento = random.choice(frasi).format(a=utente1.mention, b=utente2.mention)
 
         # Genera l'immagine (in un thread per non bloccare il bot)
         av1_bytes = await utente1.display_avatar.replace(size=256).read()
         av2_bytes = await utente2.display_avatar.replace(size=256).read()
+        emoji_imgs = await _prefetch_emoji(utente1.display_name, utente2.display_name)
         buf = await asyncio.to_thread(
             _crea_immagine, av1_bytes, av2_bytes, perc,
-            utente1.display_name, utente2.display_name,
+            utente1.display_name, utente2.display_name, emoji_imgs,
         )
 
         file = discord.File(buf, filename="ship.png")
-        view = PairView(utente1, utente2, interaction.guild_id)
-        await interaction.followup.send(content=commento, file=file, view=view)
+        view = PairView(utente1, utente2, ctx.guild.id)
+        await ctx.send(content=commento, file=file, view=view)
 
     # ── MARRIAGE ──────────────────────────────────────────────────────────────
-    @app_commands.command(name="marriage", description="Mostra con chi sei sposato/a (dura 24h)")
-    @app_commands.describe(utente="(Opzionale) Controlla il matrimonio di un altro utente")
-    @logconfig.feature_check("fun")
-    async def marriage(self, interaction: discord.Interaction, utente: discord.Member = None):
-        target = utente or interaction.user
-        m = db.get_marriage(interaction.guild_id, target.id)
+    @commands.command(name="marriage")
+    async def marriage(self, ctx: commands.Context, utente: discord.Member = None):
+        target = utente or ctx.author
+        m = db.get_marriage(ctx.guild.id, target.id)
 
         if not m:
-            await interaction.response.send_message(
-                f"💔 {target.mention} al momento è single.", ephemeral=True
-            )
+            await ctx.send(f"💔 {target.mention} al momento è single.")
             return
 
         scadenza = datetime.datetime.fromisoformat(m["expires_at"])
@@ -519,7 +562,7 @@ class Fun(commands.Cog):
         embed.add_field(name="Coppia", value=f"<@{m['user1']}> 💞 <@{m['user2']}>", inline=False)
         embed.add_field(name="Scade", value=quando, inline=False)
         embed.set_footer(text="I matrimoni durano 24 ore")
-        await interaction.response.send_message(embed=embed)
+        await ctx.send(embed=embed)
 
 
 async def setup(bot):

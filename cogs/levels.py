@@ -186,18 +186,18 @@ class Levels(commands.Cog):
         filled = int(length * min(into, need) / need)
         return "▰" * filled + "▱" * (length - filled)
 
-    # ── /rank ────────────────────────────────────────────────────────────────
-    @app_commands.command(name="rank", description="Mostra il tuo livello (o quello di un altro utente)")
-    @app_commands.describe(utente="Utente di cui vedere il rank (opzionale)")
-    @app_commands.guild_only()
-    async def rank(self, interaction: discord.Interaction, utente: discord.Member = None):
-        c = ls.cfg(db.get_log_config(interaction.guild_id))
+    # ── +rank / +r ───────────────────────────────────────────────────────────
+    @commands.command(name="rank", aliases=["r"])
+    @commands.guild_only()
+    async def rank(self, ctx: commands.Context, utente: discord.Member = None):
+        c = ls.cfg(db.get_log_config(ctx.guild.id))
         if not c["enabled"]:
-            return await interaction.response.send_message("❌ Il sistema livelli è disattivato.", ephemeral=True)
-        member = utente or interaction.user
-        xp = db.get_xp(interaction.guild_id, member.id)
+            await ctx.send("❌ Il sistema livelli è disattivato.")
+            return
+        member = utente or ctx.author
+        xp = db.get_xp(ctx.guild.id, member.id)
         info = ls.level_info(c, xp)
-        rank = f"#{db.level_rank(interaction.guild_id, member.id)}" if xp > 0 else "—"
+        rank = f"#{db.level_rank(ctx.guild.id, member.id)}" if xp > 0 else "—"
 
         embed = discord.Embed(color=member.color if member.color.value else BLU)
         embed.set_author(name=str(member), icon_url=member.display_avatar.url)
@@ -205,27 +205,28 @@ class Levels(commands.Cog):
         embed.add_field(name="Livello", value=f"**{info['level']}**", inline=True)
         embed.add_field(name="Rank server", value=f"**{rank}**", inline=True)
         embed.add_field(name="Exp", value=f"**{xp}** / {info['next_total']}", inline=True)
-        await interaction.response.send_message(embed=embed)
+        await ctx.send(embed=embed)
 
-    # ── /leaderboard ─────────────────────────────────────────────────────────
-    @app_commands.command(name="leaderboard", description="Classifica livelli del server (top 10)")
-    @app_commands.guild_only()
-    async def leaderboard(self, interaction: discord.Interaction):
-        c = ls.cfg(db.get_log_config(interaction.guild_id))
-        rows = db.level_top(interaction.guild_id, 10)
+    # ── +leaderboard ──────────────────────────────────────────────────────────
+    @commands.command(name="leaderboard", aliases=["lb"])
+    @commands.guild_only()
+    async def leaderboard(self, ctx: commands.Context):
+        c = ls.cfg(db.get_log_config(ctx.guild.id))
+        rows = db.level_top(ctx.guild.id, 10)
         if not rows:
-            return await interaction.response.send_message("Nessuno ha ancora XP. 🤷", ephemeral=True)
+            await ctx.send("Nessuno ha ancora XP. 🤷")
+            return
         medals = {0: "🥇", 1: "🥈", 2: "🥉"}
         lines = []
         for i, r in enumerate(rows):
             info = ls.level_info(c, r["xp"])
             pos = medals.get(i, f"`#{i + 1}`")
             lines.append(f"{pos} <@{r['user_id']}>\n　**Level:** `{info['level']}`　**Exp:** `{r['xp']}/{info['next_total']}`")
-        embed = discord.Embed(title=f"🏆 {interaction.guild.name} — Leaderboard",
+        embed = discord.Embed(title=f"🏆 {ctx.guild.name} — Leaderboard",
                               color=BLU, description="\n\n".join(lines))
-        if interaction.guild.icon:
-            embed.set_thumbnail(url=interaction.guild.icon.url)
-        await interaction.response.send_message(embed=embed)
+        if ctx.guild.icon:
+            embed.set_thumbnail(url=ctx.guild.icon.url)
+        await ctx.send(embed=embed)
 
     # ── /level (admin) ───────────────────────────────────────────────────────
     level_group = app_commands.Group(

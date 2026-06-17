@@ -4,31 +4,67 @@ from discord.ext import commands
 BLU = 0x5865F2
 
 
+def _url(asset: discord.Asset) -> str:
+    """URL dell'asset a 1024px, in GIF se è animato (così pfp/banner animati si vedono animati)."""
+    if asset.is_animated():
+        return asset.replace(format="gif", size=1024).url
+    return asset.replace(size=1024).url
+
+
 class Avatar(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    def _embed(self, target: discord.Member, titolo: str, asset: discord.Asset) -> discord.Embed:
+    def _embed(self, target: discord.abc.User, titolo: str, asset: discord.Asset) -> discord.Embed:
         colore = target.color if getattr(target, "color", None) and target.color.value else BLU
         embed = discord.Embed(title=titolo, color=colore)
         embed.set_author(name=str(target), icon_url=target.display_avatar.url)
-        embed.set_image(url=asset.replace(size=1024).url)
+        embed.set_image(url=_url(asset))
         return embed
 
-    # +av [utente] → avatar del SERVER (quello che hai nel server)
+    # ── AVATAR ───────────────────────────────────────────────────────────────
     @commands.command(name="av")
     @commands.guild_only()
     async def av(self, ctx: commands.Context, target: discord.Member = None):
+        """Avatar del SERVER (quello che hai nel server)."""
         target = target or ctx.author
         await ctx.send(embed=self._embed(target, "Server Avatar", target.display_avatar))
 
-    # +avuser [utente] → avatar del PROFILO (globale)
     @commands.command(name="avuser")
     @commands.guild_only()
     async def avuser(self, ctx: commands.Context, target: discord.Member = None):
+        """Avatar del PROFILO (globale)."""
         target = target or ctx.author
-        glob = target.avatar or target.default_avatar   # globale, ignora quello del server
+        glob = target.avatar or target.default_avatar
         await ctx.send(embed=self._embed(target, "Avatar", glob))
+
+    # ── BANNER ───────────────────────────────────────────────────────────────
+    @commands.command(name="banner")
+    @commands.guild_only()
+    async def banner(self, ctx: commands.Context, target: discord.Member = None):
+        """Banner del SERVER (se impostato), altrimenti quello del profilo."""
+        target = target or ctx.author
+        asset = target.guild_banner
+        titolo = "Server Banner"
+        if asset is None:
+            user = await self.bot.fetch_user(target.id)   # il banner globale va recuperato
+            asset = user.banner
+            titolo = "Banner"
+        if asset is None:
+            await ctx.send(f"❌ {target.display_name} non ha un banner.")
+            return
+        await ctx.send(embed=self._embed(target, titolo, asset))
+
+    @commands.command(name="banneruser")
+    @commands.guild_only()
+    async def banneruser(self, ctx: commands.Context, target: discord.Member = None):
+        """Banner del PROFILO (globale)."""
+        target = target or ctx.author
+        user = await self.bot.fetch_user(target.id)
+        if user.banner is None:
+            await ctx.send(f"❌ {target.display_name} non ha un banner sul profilo.")
+            return
+        await ctx.send(embed=self._embed(user, "Banner", user.banner))
 
 
 async def setup(bot):

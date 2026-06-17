@@ -1,137 +1,112 @@
 import discord
 from discord.ext import commands
-from discord import app_commands
 import random
 
+import database as db
 import logconfig
+
 
 class Minigames(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.indovina_partite = {}  # Tiene traccia delle partite attive per canale
+        self.indovina_partite = {}  # canale_id -> {"numero", "tentativi"}
 
-    async def cog_app_command_error(self, interaction, error):
-        if isinstance(error, logconfig.FeatureDisabled):
-            msg = "🚫 I minigiochi sono disattivati su questo server."
-        else:
-            msg = f"❌ Errore: {error}"
-        if interaction.response.is_done():
-            await interaction.followup.send(msg, ephemeral=True)
-        else:
-            await interaction.response.send_message(msg, ephemeral=True)
+    async def cog_check(self, ctx: commands.Context) -> bool:
+        if ctx.guild is None:
+            return False
+        if not logconfig.feature_enabled(db.get_log_config(ctx.guild.id), "minigames"):
+            await ctx.send("🚫 I minigiochi non sono disponibili al momento su questo server.")
+            return False
+        return True
 
-    # ── DADO ──────────────────────────────────────────────────────────────────
-    @app_commands.command(name="dado", description="Lancia un dado (default: 6 facce)")
-    @logconfig.feature_check("minigames")
-    async def dado(self, interaction: discord.Interaction, facce: int = 6):
-        if facce < 2:
-            await interaction.response.send_message("❌ Il dado deve avere almeno 2 facce.", ephemeral=True)
-            return
-        risultato = random.randint(1, facce)
-        await interaction.response.send_message(f"🎲 Hai lanciato un **d{facce}**: **{risultato}**")
-
-    # ── MONETA ────────────────────────────────────────────────────────────────
-    @app_commands.command(name="moneta", description="Scegli testa o croce, poi lancia la moneta")
-    @app_commands.choices(scelta=[
-        app_commands.Choice(name="Testa 🪙", value="testa"),
-        app_commands.Choice(name="Croce ❌", value="croce"),
-    ])
-    @logconfig.feature_check("minigames")
-    async def moneta(self, interaction: discord.Interaction, scelta: app_commands.Choice[str]):
-        risultato = random.choice(["testa", "croce"])
+    # ── MONETA ──────────────────────────────────────────────────────────────
+    @commands.command(name="moneta")
+    async def moneta(self, ctx: commands.Context, scelta: str = None):
         nomi = {"testa": "Testa 🪙", "croce": "Croce ❌"}
-        vinto = scelta.value == risultato
-        esito = "🎉 Hai indovinato!" if vinto else "😅 Hai sbagliato!"
-        await interaction.response.send_message(
-            f"Hai scelto **{nomi[scelta.value]}**\n"
-            f"La moneta è uscita: **{nomi[risultato]}**\n{esito}"
-        )
+        if scelta is None or scelta.lower() not in nomi:
+            await ctx.send("❌ Scegli **testa** o **croce**. Esempio: `+moneta testa`")
+            return
+        scelta = scelta.lower()
+        risultato = random.choice(["testa", "croce"])
+        esito = "🎉 Hai indovinato!" if scelta == risultato else "😅 Hai sbagliato!"
+        await ctx.send(
+            f"Hai scelto **{nomi[scelta]}**\n"
+            f"La moneta è uscita: **{nomi[risultato]}**\n{esito}")
 
-    # ── 8BALL ─────────────────────────────────────────────────────────────────
-    @app_commands.command(name="8ball", description="Chiedi qualcosa alla palla magica")
-    @logconfig.feature_check("minigames")
-    async def ball8(self, interaction: discord.Interaction, domanda: str):
+    # ── 8BALL ───────────────────────────────────────────────────────────────
+    @commands.command(name="8ball")
+    async def ball8(self, ctx: commands.Context, *, domanda: str = None):
+        if not domanda:
+            await ctx.send("❌ Scrivi una domanda. Esempio: `+8ball mi sposerò?`")
+            return
         risposte = [
-            "Sì, assolutamente! ✅",
-            "No, decisamente no. ❌",
-            "Forse... 🤔",
-            "Le stelle dicono sì. ⭐",
-            "Non ci contare. 🚫",
-            "Tutto indica di sì. 👍",
-            "Le prospettive non sono buone. 😬",
-            "Chiedilo di nuovo più tardi. 🔄",
-            "È certo! 💯",
-            "I segni puntano al no. 👎",
+            "Sì, assolutamente! ✅", "No, decisamente no. ❌", "Forse... 🤔",
+            "Le stelle dicono sì. ⭐", "Non ci contare. 🚫", "Tutto indica di sì. 👍",
+            "Le prospettive non sono buone. 😬", "Chiedilo di nuovo più tardi. 🔄",
+            "È certo! 💯", "I segni puntano al no. 👎",
         ]
-        risposta = random.choice(risposte)
-        embed = discord.Embed(color=discord.Color.purple())
-        embed.add_field(name="❓ Domanda", value=domanda, inline=False)
-        embed.add_field(name="🎱 Risposta", value=risposta, inline=False)
-        await interaction.response.send_message(embed=embed)
+        embed = discord.Embed(title="🎱 Palla Magica", color=discord.Color.purple())
+        embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
+        embed.add_field(name="❓ Domanda", value=domanda[:1000], inline=False)
+        embed.add_field(name="💬 Risposta", value=random.choice(risposte), inline=False)
+        await ctx.send(embed=embed)
 
-    # ── CARTA FORBICE SASSO ───────────────────────────────────────────────────
-    @app_commands.command(name="rps", description="Gioca a carta, forbice, sasso contro il bot")
-    @app_commands.choices(scelta=[
-        app_commands.Choice(name="🪨 Sasso", value="sasso"),
-        app_commands.Choice(name="📄 Carta", value="carta"),
-        app_commands.Choice(name="✂️ Forbice", value="forbice"),
-    ])
-    @logconfig.feature_check("minigames")
-    async def rps(self, interaction: discord.Interaction, scelta: app_commands.Choice[str]):
+    # ── CARTA / FORBICE / SASSO ──────────────────────────────────────────────
+    @commands.command(name="rps")
+    async def rps(self, ctx: commands.Context, scelta: str = None):
         opzioni = ["sasso", "carta", "forbice"]
-        bot_scelta = random.choice(opzioni)
         emoji = {"sasso": "🪨", "carta": "📄", "forbice": "✂️"}
+        if scelta is None or scelta.lower() not in opzioni:
+            await ctx.send("❌ Scegli **sasso**, **carta** o **forbice**. Esempio: `+rps sasso`")
+            return
+        scelta = scelta.lower()
+        bot_scelta = random.choice(opzioni)
 
-        if scelta.value == bot_scelta:
-            risultato = "Pareggio! 🤝"
-            colore = discord.Color.yellow()
-        elif (
-            (scelta.value == "sasso" and bot_scelta == "forbice") or
-            (scelta.value == "carta" and bot_scelta == "sasso") or
-            (scelta.value == "forbice" and bot_scelta == "carta")
-        ):
-            risultato = "Hai vinto! 🎉"
-            colore = discord.Color.green()
+        if scelta == bot_scelta:
+            risultato, colore = "Pareggio! 🤝", discord.Color.yellow()
+        elif ((scelta == "sasso" and bot_scelta == "forbice") or
+              (scelta == "carta" and bot_scelta == "sasso") or
+              (scelta == "forbice" and bot_scelta == "carta")):
+            risultato, colore = "Hai vinto! 🎉", discord.Color.green()
         else:
-            risultato = "Hai perso! 😅"
-            colore = discord.Color.red()
+            risultato, colore = "Hai perso! 😅", discord.Color.red()
 
         embed = discord.Embed(title="Carta, Forbice, Sasso", color=colore)
-        embed.add_field(name="Tu", value=f"{emoji[scelta.value]} {scelta.value.capitalize()}", inline=True)
+        embed.add_field(name="Tu", value=f"{emoji[scelta]} {scelta.capitalize()}", inline=True)
         embed.add_field(name="Bot", value=f"{emoji[bot_scelta]} {bot_scelta.capitalize()}", inline=True)
         embed.add_field(name="Risultato", value=risultato, inline=False)
-        await interaction.response.send_message(embed=embed)
+        await ctx.send(embed=embed)
 
-    # ── INDOVINA IL NUMERO ────────────────────────────────────────────────────
-    @app_commands.command(name="indovina", description="Inizia una partita a indovina il numero (1-100)")
-    @logconfig.feature_check("minigames")
-    async def indovina(self, interaction: discord.Interaction):
-        canale_id = interaction.channel_id
-        if canale_id in self.indovina_partite:
-            await interaction.response.send_message("⚠️ C'è già una partita in corso in questo canale! Usa `/tentativo`.", ephemeral=True)
+    # ── INDOVINA IL NUMERO ───────────────────────────────────────────────────
+    @commands.command(name="indovina")
+    async def indovina(self, ctx: commands.Context):
+        if ctx.channel.id in self.indovina_partite:
+            await ctx.send("⚠️ C'è già una partita in corso in questo canale! Usa `+tentativo <numero>`.")
             return
-        numero = random.randint(1, 100)
-        self.indovina_partite[canale_id] = {"numero": numero, "tentativi": 0}
-        await interaction.response.send_message("🎮 Ho pensato un numero tra **1 e 100**! Usa `/tentativo <numero>` per indovinare.")
+        self.indovina_partite[ctx.channel.id] = {"numero": random.randint(1, 100), "tentativi": 0}
+        await ctx.send("🎮 Ho pensato un numero tra **1 e 100**! Usa `+tentativo <numero>` per indovinare.")
 
-    @app_commands.command(name="tentativo", description="Fai un tentativo per indovinare il numero")
-    @logconfig.feature_check("minigames")
-    async def tentativo(self, interaction: discord.Interaction, numero: int):
-        canale_id = interaction.channel_id
-        if canale_id not in self.indovina_partite:
-            await interaction.response.send_message("❌ Nessuna partita in corso. Usa `/indovina` per iniziarne una.", ephemeral=True)
+    @commands.command(name="tentativo")
+    async def tentativo(self, ctx: commands.Context, numero: int = None):
+        if numero is None:
+            await ctx.send("❌ Scrivi un numero. Esempio: `+tentativo 50`")
             return
-        partita = self.indovina_partite[canale_id]
+        partita = self.indovina_partite.get(ctx.channel.id)
+        if not partita:
+            await ctx.send("❌ Nessuna partita in corso. Usa `+indovina` per iniziarne una.")
+            return
         partita["tentativi"] += 1
         segreto = partita["numero"]
-
         if numero == segreto:
-            del self.indovina_partite[canale_id]
-            await interaction.response.send_message(f"🎉 **{interaction.user.display_name}** ha indovinato! Era **{segreto}** in {partita['tentativi']} tentativ{'o' if partita['tentativi'] == 1 else 'i'}!")
+            del self.indovina_partite[ctx.channel.id]
+            t = partita["tentativi"]
+            await ctx.send(f"🎉 **{ctx.author.display_name}** ha indovinato! Era **{segreto}** "
+                           f"in {t} tentativ{'o' if t == 1 else 'i'}!")
         elif numero < segreto:
-            await interaction.response.send_message(f"📈 **{numero}** è troppo basso! (Tentativo {partita['tentativi']})")
+            await ctx.send(f"📈 **{numero}** è troppo basso! (Tentativo {partita['tentativi']})")
         else:
-            await interaction.response.send_message(f"📉 **{numero}** è troppo alto! (Tentativo {partita['tentativi']})")
+            await ctx.send(f"📉 **{numero}** è troppo alto! (Tentativo {partita['tentativi']})")
+
 
 async def setup(bot):
     await bot.add_cog(Minigames(bot))

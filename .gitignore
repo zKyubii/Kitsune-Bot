@@ -14,3 +14,6 @@ __pycache__/
 # File temporanei
 *.tmp
 test_*.png
+
+# Cache emoji Twemoji (rigenerata da sola)
+assets/emoji_cache/

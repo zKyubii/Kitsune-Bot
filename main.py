@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import os
 import asyncio
+import traceback
 from dotenv import load_dotenv
 
 import database as db
@@ -13,7 +14,22 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
-bot = commands.Bot(command_prefix=["+", "!"], intents=intents)
+bot = commands.Bot(command_prefix=["+", "!"], intents=intents, help_command=None)
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    # Ignora i comandi inesistenti (es. "+quote" gestito dal listener) e i check falliti
+    if isinstance(error, (commands.CommandNotFound, commands.CheckFailure)):
+        return
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send(f"❌ Manca un argomento. Prova `+help {ctx.command}`.")
+        return
+    if isinstance(error, (commands.BadArgument, commands.MemberNotFound)):
+        await ctx.send("❌ Argomento non valido (controlla che l'utente esista).")
+        return
+    traceback.print_exception(type(error), error, error.__traceback__)
+
 
 @bot.event
 async def on_ready():
