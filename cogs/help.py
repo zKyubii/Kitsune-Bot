@@ -21,11 +21,11 @@ PAGINE = [
         ]),
         ("Minigiochi", [
             ("`+rps <sasso/carta/forbice>`", "Sasso carta forbice contro il bot."),
-            ("`+ship @utente1 [@utente2]`", "Compatibilità amorosa tra due utenti."),
+            ("`+ship @utente1 <@utente2>`", "Compatibilità amorosa tra due utenti."),
             ("`+8ball <domanda>`", "Fai una domanda alla palla magica."),
             ("`+moneta <testa/croce>`", "Scegli e lancia la moneta."),
             ("`+indovina`", "Indovina il numero tra 1 e 100 (`+tentativo <n>`)."),
-            ("`+marriage [@utente]`", "Mostra con chi sei sposato/a (dura 24h)."),
+            ("`+marriage <@utente>`", "Mostra con chi sei sposato/a (dura 24h)."),
         ]),
         ("Level", [
             ("`+rank` | `+r`", "Mostra il tuo livello (o altrui) e la posizione in classifica."),
@@ -36,31 +36,36 @@ PAGINE = [
 
 # Dettaglio per +help <comando>
 DETTAGLI = {
-    "av": ("`+av [@utente]`", "Mostra l'avatar che hai (o un altro utente) nel server."),
-    "avuser": ("`+avuser [@utente]`", "Mostra l'avatar del profilo (globale)."),
-    "banner": ("`+banner [@utente]`", "Mostra il banner del server o, se non c'è, del profilo."),
-    "banneruser": ("`+banneruser [@utente]`", "Mostra il banner del profilo (globale)."),
+    "av": ("`+av <@utente>`", "Mostra l'avatar che hai (o un altro utente) nel server."),
+    "avuser": ("`+avuser <@utente>`", "Mostra l'avatar del profilo (globale)."),
+    "banner": ("`+banner <@utente>`", "Mostra il banner del server o, se non c'è, del profilo."),
+    "banneruser": ("`+banneruser <@utente>`", "Mostra il banner del profilo (globale)."),
     "quote": ("`+quote` (in risposta)", "Rispondi a un messaggio con `+quote` per trasformarlo in citazione."),
     "help": ("`+help [comando]`", "Mostra tutti i comandi, o i dettagli di uno specifico."),
     "rps": ("`+rps <sasso/carta/forbice>`", "Sasso carta forbice contro il bot."),
-    "ship": ("`+ship @utente1 [@utente2]`", "Compatibilità amorosa tra due utenti (taggane 1 o 2)."),
+    "ship": ("`+ship @utente1 <@utente2>`", "Compatibilità amorosa tra due utenti (taggane 1 o 2)."),
     "8ball": ("`+8ball <domanda>`", "Fai una domanda alla palla magica."),
     "moneta": ("`+moneta <testa/croce>`", "Scegli testa o croce e lancia la moneta."),
     "indovina": ("`+indovina` / `+tentativo <n>`", "Indovina il numero tra 1 e 100."),
     "tentativo": ("`+tentativo <numero>`", "Prova a indovinare il numero della partita in corso."),
-    "marriage": ("`+marriage [@utente]`", "Mostra con chi sei sposato/a (dura 24h)."),
-    "rank": ("`+rank` / `+r [@utente]`", "Mostra il tuo livello (o altrui) e la posizione in classifica."),
-    "r": ("`+r [@utente]`", "Alias di `+rank`: il tuo livello (o altrui) e la posizione."),
+    "marriage": ("`+marriage <@utente>`", "Mostra con chi sei sposato/a (dura 24h)."),
+    "rank": ("`+rank` / `+r <@utente>`", "Mostra il tuo livello (o altrui) e la posizione in classifica."),
+    "r": ("`+r <@utente>`", "Alias di `+rank`: il tuo livello (o altrui) e la posizione."),
     "leaderboard": ("`+leaderboard` / `+lb`", "Classifica livelli del server (top 10)."),
     "lb": ("`+lb`", "Alias di `+leaderboard`: classifica del server (top 10)."),
 }
 
 
 def _embed_pagina(index: int) -> discord.Embed:
-    embed = discord.Embed(title=TITOLO, description=INTRO, color=ORO)
+    # Tutto nella descrizione con markdown: titolo grande (#), categorie (###),
+    # e una riga vuota tra un comando e l'altro per dare respiro.
+    parti = [f"# {TITOLO}", "", INTRO, ""]
     for categoria, comandi in PAGINE[index]:
-        valore = "\n".join(f"• {etichetta} — {descr}" for etichetta, descr in comandi)
-        embed.add_field(name=f"━━━ {categoria} ━━━", value=valore, inline=False)
+        parti.append(f"### {categoria}")
+        righe = [f"• {etichetta} — {descr}" for etichetta, descr in comandi]
+        parti.append("\n\n".join(righe))
+        parti.append("")
+    embed = discord.Embed(description="\n".join(parti), color=ORO)
     if len(PAGINE) > 1:
         embed.set_footer(text=f"Pagina {index + 1}/{len(PAGINE)}")
     return embed
