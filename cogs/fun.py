@@ -7,6 +7,7 @@ import io
 import os
 import math
 import datetime
+import unicodedata
 from PIL import Image, ImageDraw, ImageFont
 
 import database as db
@@ -87,6 +88,14 @@ def _render_emoji(testo: str, target_h: int):
     em = tmp.crop(bbox)
     scala = target_h / em.height
     return em.resize((max(1, int(em.width * scala)), target_h), Image.LANCZOS)
+
+
+def _normalizza_nome(testo: str) -> str:
+    """Converte i font 'fancy' unicode (fraktur/grassetto/corsivo, es. 𝕸𝖔𝖓𝖘𝖙𝖊𝖗 → Monster)
+    in lettere normali, così il font li disegna invece di mostrare □. Le emoji restano."""
+    testo = unicodedata.normalize("NFKC", testo)
+    testo = "".join(ch for ch in testo if unicodedata.category(ch) != "Cc")
+    return testo.strip() or "?"
 
 
 def _is_emoji(ch: str) -> bool:
@@ -300,6 +309,8 @@ def _draw_heart(draw: ImageDraw.ImageDraw, cx: float, cy: float, larghezza: floa
 
 
 def _crea_immagine(av1_bytes: bytes, av2_bytes: bytes, perc: int, name1: str, name2: str) -> io.BytesIO:
+    name1 = _normalizza_nome(name1)
+    name2 = _normalizza_nome(name2)
     canvas = _genera_sfondo()
     draw = ImageDraw.Draw(canvas)
 

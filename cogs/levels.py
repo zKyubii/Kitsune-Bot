@@ -135,6 +135,10 @@ class Levels(commands.Cog):
                 humans = [m for m in vc.members if not m.bot]
                 if len(humans) < 2:   # niente XP se sei da solo
                     continue
+                # Serve almeno una persona col MIC ATTIVO: se sono tutti mic-mutati
+                # (o server-mutati) il canale è "morto" → niente XP a nessuno.
+                if not any(m.voice and not (m.voice.self_mute or m.voice.mute) for m in humans):
+                    continue
                 for member in humans:
                     vs = member.voice
                     if not vs or vs.afk:
@@ -160,6 +164,13 @@ class Levels(commands.Cog):
     @voice_loop.before_loop
     async def _before_voice(self):
         await self.bot.wait_until_ready()
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member, before, after):
+        # Quando l'utente esce o cambia canale, azzera il timer della cuffia
+        # (altrimenti uno stato vecchio lo bloccherebbe al rientro).
+        if before.channel != after.channel:
+            self.deaf_since.pop((member.guild.id, member.id), None)
 
     # ── COLEAVE ──────────────────────────────────────────────────────────────
     @commands.Cog.listener()
