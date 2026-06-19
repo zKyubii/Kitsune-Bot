@@ -1,3 +1,5 @@
+import time
+
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -5,10 +7,18 @@ from discord import app_commands
 import database as db
 from cogs.embedbuilder import costruisci_embed, _replace
 
+_BOOST_MSG_TYPES = (
+    discord.MessageType.premium_guild_subscription,
+    discord.MessageType.premium_guild_tier_1,
+    discord.MessageType.premium_guild_tier_2,
+    discord.MessageType.premium_guild_tier_3,
+)
+
 
 class Greetings(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self._boost_recent = {}  # user_id -> ultimo timestamp avviso boost (anti-doppione)
 
     set_group = app_commands.Group(
         name="set", description="Configura i messaggi automatici",
@@ -97,11 +107,29 @@ class Greetings(commands.Cog):
     async def on_member_join(self, member: discord.Member):
         await self._invia(member.guild, "greet", member)
 
+    async def _trigger_boost(self, guild, member):
+        """Invia l'alert boost una sola volta (i due trigger qui sotto potrebbero
+        scattare entrambi per lo stesso boost)."""
+        if member is None or member.bot:
+            return
+        now = time.time()
+        if now - self._boost_recent.get(member.id, 0) < 30:
+            return
+        self._boost_recent[member.id] = now
+        await self._invia(guild, "boost", member)
+
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
         # Boost: premium_since passa da None a una data
         if before.premium_since is None and after.premium_since is not None:
-            await self._invia(after.guild, "boost", after)
+            await self._trigger_boost(after.guild, after)
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        # Trigger affidabile: il messaggio di sistema che Discord manda a ogni boost
+        # (funziona anche se il membro non è in cache, dove on_member_update fallisce).
+        if message.guild and message.type in _BOOST_MSG_TYPES:
+            await self._trigger_boost(message.guild, message.author)
 
 
 async def setup(bot):

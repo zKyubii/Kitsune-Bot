@@ -101,6 +101,58 @@ def _normalizza_nome(testo: str) -> str:
     return testo.strip() or "?"
 
 
+def _wrap_nome(testo: str, max_chars: int = 18, max_lines: int = 2):
+    """Spezza il nome su più righe (max 2) senza tagliare le parole se possibile.
+    Tronca con … solo se eccede davvero il limite."""
+    testo = testo.strip() or "?"
+    if len(testo) <= max_chars:
+        return [testo]
+    lines, cur, troncato = [], "", False
+    for word in testo.split(" "):
+        # parola singola più lunga di una riga → taglio netto
+        while len(word) > max_chars and not troncato:
+            if cur:
+                if len(lines) >= max_lines:
+                    troncato = True
+                    break
+                lines.append(cur)
+                cur = ""
+            if len(lines) >= max_lines:
+                troncato = True
+                break
+            lines.append(word[:max_chars])
+            word = word[max_chars:]
+        if troncato:
+            break
+        cand = word if not cur else cur + " " + word
+        if len(cand) <= max_chars:
+            cur = cand
+        elif len(lines) >= max_lines:
+            troncato = True
+            break
+        else:
+            lines.append(cur)
+            cur = word
+    if not troncato and cur:
+        if len(lines) < max_lines:
+            lines.append(cur)
+        else:
+            troncato = True
+    if not lines:
+        lines = [testo[:max_chars]]
+        troncato = len(testo) > max_chars
+    if troncato:
+        lines[-1] = lines[-1][:max_chars - 1].rstrip() + "…"
+    return lines[:max_lines]
+
+
+def _render_nome(canvas, cx, lines, size, fill, emoji_imgs, primo_centro_y):
+    """Disegna le righe di un nome impilate verticalmente, centrate su cx."""
+    lh = size + 4
+    for i, line in enumerate(lines):
+        _testo_centrato(canvas, cx, int(primo_centro_y + i * lh), line, size, fill, emoji_imgs)
+
+
 def _is_emoji(ch: str) -> bool:
     o = ord(ch)
     return (
@@ -381,14 +433,18 @@ def _crea_immagine(av1_bytes: bytes, av2_bytes: bytes, perc: int, name1: str, na
         draw.rectangle([ax - bordo, y - bordo, ax + box + bordo, y + box + bordo], fill=ROSA)
         canvas.paste(av, (ax, y), av)
 
-    # Nomi: rosa, puliti, senza contorno nero (solo ombra leggera) — stile ZeroTwo
-    _testo_centrato(canvas, int(x1 + box / 2), int(y + box + 30), name1[:20], 30, ROSA, emoji_imgs)
-    _testo_centrato(canvas, int(x2 + box / 2), int(y - 30), name2[:20], 30, ROSA, emoji_imgs)
+    # Nomi: rosa, interi (su 2 righe se lunghi), senza contorno nero — stile ZeroTwo
+    lines1 = _wrap_nome(name1)
+    lines2 = _wrap_nome(name2)
+    lh = 34
+    _render_nome(canvas, int(x1 + box / 2), lines1, 30, ROSA, emoji_imgs, y + box + 25)
+    primo2 = (y - 25) - (len(lines2) - 1) * lh
+    _render_nome(canvas, int(x2 + box / 2), lines2, 30, ROSA, emoji_imgs, primo2)
 
-    # Cuore centrale con percentuale
+    # Cuore centrale con percentuale (un decimale, stile ZeroTwo)
     cx, cy = W // 2, H // 2
     _draw_heart(draw, cx, cy, 130, ROSA)
-    draw.text((cx, cy + 6), f"{perc}%", font=_font(28), fill=(90, 25, 55), anchor="mm")
+    draw.text((cx, cy + 6), f"{perc}%", font=_font(26), fill=(90, 25, 55), anchor="mm")
 
     buf = io.BytesIO()
     canvas.convert("RGB").save(buf, format="PNG")
@@ -443,6 +499,11 @@ class PairView(discord.ui.View):
 
     @discord.ui.button(label="Pair", emoji="💍", style=discord.ButtonStyle.success)
     async def pair(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.u1.id == self.u2.id:
+            await interaction.response.send_message(
+                "💍 Non puoi sposare te stesso! L'autostima è importante, "
+                "ma per sposarti serve qualcun altro 😄", ephemeral=True)
+            return
         if interaction.user.id not in (self.u1.id, self.u2.id):
             await interaction.response.send_message(
                 "❌ Solo le due persone shippate possono sposarsi!", ephemeral=True
@@ -485,7 +546,7 @@ class Fun(commands.Cog):
         coppia = tuple(sorted([utente1.id, utente2.id]))
         giorno = datetime.datetime.now().date()
         rng = random.Random(hash((coppia, giorno.isoformat())))
-        perc = rng.randint(0, 100)
+        perc = round(rng.uniform(0, 100), 1)
 
         # Frasi varie: i nomi non sono sempre all'inizio. {a} e {b} = i due utenti
         if perc < 20:
