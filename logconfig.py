@@ -113,6 +113,36 @@ def role_categories(config: dict) -> dict:
     return profile_cfg(config).get("role_categories", {})
 
 
+# ── CUSTOM REACTIONS = regola "mention" dell'autoreact (dato condiviso) ──────
+def mention_rule_for(config: dict, user_id: int):
+    """La regola autoreact di tipo 'mention' che scatta quando l'utente è taggato."""
+    for r in config.get("autoreact", {}).get("rules", []):
+        if r.get("type") == "mention" and str(r.get("trigger")) == str(user_id):
+            return r
+    return None
+
+
+def ensure_mention_rule(config: dict, user_id: int) -> dict:
+    """Restituisce la regola mention dell'utente, creandola vuota se non esiste."""
+    rules = config.setdefault("autoreact", {}).setdefault("rules", [])
+    existing = mention_rule_for(config, user_id)
+    if existing is not None:
+        return existing
+    new_id = max((r.get("id", 0) for r in rules if isinstance(r.get("id"), int)), default=0) + 1
+    rule = {"id": new_id, "type": "mention", "trigger": str(user_id),
+            "mode": "contains", "emojis": []}
+    rules.append(rule)
+    return rule
+
+
+def remove_mention_rule(config: dict, user_id: int):
+    rules = config.get("autoreact", {}).get("rules", [])
+    config.setdefault("autoreact", {})["rules"] = [
+        r for r in rules
+        if not (r.get("type") == "mention" and str(r.get("trigger")) == str(user_id))
+    ]
+
+
 # ── ANTISPAM ──────────────────────────────────────────────────────────────────
 SPAM_CATEGORIES = {
     "spam": "Spam",

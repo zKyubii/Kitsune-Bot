@@ -42,10 +42,11 @@ def _bool_label(blocked: bool) -> str:
     return "🔴 Bloccato" if blocked else "🟢 Visibile"
 
 
-def _custom_emojis_line(member, guild, config, prof) -> str:
+def _custom_emojis_line(member, guild, config) -> str:
     if not logconfig.custom_react_allowed(config, member):
         return "Non abilitate"
-    emojis = prof.get("custom_emojis", [])
+    r = logconfig.mention_rule_for(config, member.id)
+    emojis = r.get("emojis", []) if r else []
     return " ".join(emojis) if emojis else "Non impostate"
 
 
@@ -81,7 +82,7 @@ def build_home_embed(member: discord.Member, guild: discord.Guild,
                 value=ch.mention if ch else "Nessuna vocale", inline=False)
 
     e.add_field(name="⭐ Custom Reactions",
-                value=_custom_emojis_line(member, guild, config, prof), inline=False)
+                value=_custom_emojis_line(member, guild, config), inline=False)
 
     e.set_footer(text="Kitsune • Profilo")
     return e
@@ -295,11 +296,12 @@ class ReactServerEmojiSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         v = self.view
-        prof = db.get_user_profile(v.member.id)
+        config = db.get_log_config(v.guild.id)
+        r = logconfig.ensure_mention_rule(config, v.member.id)
         # conserva le emoji scelte in altre pagine / a mano, aggiorna solo questa pagina
-        altri = [e for e in prof.get("custom_emojis", []) if e not in self._page_strs]
-        prof["custom_emojis"] = (altri + list(self.values))[:self.maxn]
-        db.save_user_profile(v.member.id, prof)
+        altri = [e for e in r.get("emojis", []) if e not in self._page_strs]
+        r["emojis"] = (altri + list(self.values))[:self.maxn]
+        db.save_log_config(v.guild.id, config)
         nv = ReactView(v.author_id, v.guild, v.member, self.page)
         await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
 
@@ -324,16 +326,18 @@ class ReactManualModal(discord.ui.Modal, title="Emoji a mano"):
         self.guild = guild
         self.member = member
         self.maxn = maxn
-        cur = db.get_user_profile(member.id).get("custom_emojis", [])
+        r = logconfig.mention_rule_for(db.get_log_config(guild.id), member.id) or {}
         self.box = discord.ui.TextInput(
             label=f"Emoji o nomi (max {maxn}, separati da spazio)", required=False,
-            default=" ".join(cur), placeholder="😀  :nome:  fuoco  <:custom:123>", max_length=200)
+            default=" ".join(r.get("emojis", [])),
+            placeholder="😀  :nome:  fuoco  <:custom:123>", max_length=200)
         self.add_item(self.box)
 
     async def on_submit(self, interaction: discord.Interaction):
-        prof = db.get_user_profile(self.member.id)
-        prof["custom_emojis"] = parse_emojis(self.box.value, self.guild, self.maxn)
-        db.save_user_profile(self.member.id, prof)
+        config = db.get_log_config(self.guild.id)
+        r = logconfig.ensure_mention_rule(config, self.member.id)
+        r["emojis"] = parse_emojis(self.box.value, self.guild, self.maxn)
+        db.save_log_config(self.guild.id, config)
         nv = ReactView(self.author_id, self.guild, self.member)
         await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
 
@@ -349,15 +353,32 @@ class ReactManualButton(discord.ui.Button):
             ReactManualModal(v.author_id, v.guild, v.member, self.maxn))
 
 
+class ReactModeButton(discord.ui.Button):
+    def __init__(self, mode):
+        is_exact = mode == "exact"
+        super().__init__(label=f"🔁 {'solo il tag' if is_exact else 'ovunque'}",
+                         style=discord.ButtonStyle.secondary, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = self.view
+        config = db.get_log_config(v.guild.id)
+        r = logconfig.ensure_mention_rule(config, v.member.id)
+        r["mode"] = "contains" if r.get("mode") == "exact" else "exact"
+        db.save_log_config(v.guild.id, config)
+        nv = ReactView(v.author_id, v.guild, v.member, v.emoji_page)
+        await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
+
+
 class ReactClearButton(discord.ui.Button):
     def __init__(self):
         super().__init__(label="🗑️ Rimuovi", style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
-        prof = self.view._prof()
-        prof["custom_emojis"] = []
-        db.save_user_profile(self.view.member.id, prof)
-        nv = ReactView(self.view.author_id, self.view.guild, self.view.member)
+        v = self.view
+        config = db.get_log_config(v.guild.id)
+        logconfig.remove_mention_rule(config, v.member.id)
+        db.save_log_config(v.guild.id, config)
+        nv = ReactView(v.author_id, v.guild, v.member)
         await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
 
 
@@ -368,13 +389,15 @@ class ReactView(_ProfileBase):
         config = self._config()
         if logconfig.custom_react_allowed(config, member):
             maxn = logconfig.custom_react_max(config)
-            cur = self._prof().get("custom_emojis", [])
+            r = logconfig.mention_rule_for(config, member.id) or {}
+            cur = r.get("emojis", [])
             if guild.emojis:
                 self.add_item(ReactServerEmojiSelect(guild, cur, maxn, emoji_page))
                 if len(guild.emojis) > 25:
                     self.add_item(ReactPageButton(-1, "◀ Emoji"))
                     self.add_item(ReactPageButton(1, "Emoji ▶"))
             self.add_item(ReactManualButton(maxn))
+            self.add_item(ReactModeButton(r.get("mode", "contains")))
             self.add_item(ReactClearButton())
         self.add_item(CloseButton())
 
@@ -386,16 +409,19 @@ class ReactView(_ProfileBase):
         if not allowed:
             e.description = ("Non sei abilitato alle custom reactions.\n"
                             "È un permesso che assegna lo staff dalla dashboard.")
-        else:
-            emojis = self._prof().get("custom_emojis", [])
-            maxn = logconfig.custom_react_max(config)
-            e.description = (
-                f"Il bot reagisce ai tuoi messaggi con le emoji che scegli (max **{maxn}**).\n\n"
-                f"**Attuali:** {' '.join(emojis) if emojis else 'Nessuna'}"
-            )
-            e.set_footer(text="Emoji dal menu (server) oppure 'Emoji a mano' per unicode/altre.")
+            e.set_footer(text="Kitsune • Profilo")
             return e
-        e.set_footer(text="Kitsune • Profilo")
+        r = logconfig.mention_rule_for(config, self.member.id) or {}
+        emojis = r.get("emojis", [])
+        maxn = logconfig.custom_react_max(config)
+        modo = ("solo quando il tag è da solo" if r.get("mode") == "exact"
+                else "anche se taggato dentro una frase")
+        e.description = (
+            f"Il bot reagisce **quando vieni taggato** con le emoji che scegli (max **{maxn}**).\n\n"
+            f"**Le tue emoji:** {' '.join(emojis) if emojis else 'Nessuna'}\n"
+            f"**Modalità:** {modo}"
+        )
+        e.set_footer(text="Emoji dal menu (server) oppure 'Emoji a mano' per unicode/altre.")
         return e
 
 
@@ -548,22 +574,6 @@ class Profile(commands.Cog):
             return
         view = HomeView(ctx.author.id, ctx.guild, member)
         await ctx.send(embed=view.build_embed(), view=view)
-
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        if message.author.bot or not message.guild:
-            return
-        config = db.get_log_config(message.guild.id)
-        if not logconfig.feature_enabled(config, "profile"):
-            return
-        if not logconfig.custom_react_allowed(config, message.author):
-            return
-        emojis = db.get_user_profile(message.author.id).get("custom_emojis", [])
-        for raw in emojis[:logconfig.custom_react_max(config)]:
-            try:
-                await message.add_reaction(discord.PartialEmoji.from_str(raw))
-            except (discord.HTTPException, ValueError):
-                pass
 
 
 async def setup(bot):
