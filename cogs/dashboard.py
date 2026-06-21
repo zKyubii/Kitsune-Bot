@@ -5,7 +5,7 @@ import datetime
 
 import database as db
 import levelsystem as ls
-from logconfig import LOG_CATEGORIES, FEATURES, SPAM_CATEGORIES, SANCTIONS, categoria_cfg
+from logconfig import LOG_CATEGORIES, FEATURES, SPAM_CATEGORIES, SANCTIONS, categoria_cfg, custom_react_max
 
 BLU = 0x5865F2
 
@@ -60,6 +60,9 @@ class BackButton(discord.ui.Button):
             embed = view.build_embed()
         elif self.destination == "rolecats":
             view = RoleCategoriesView(self.view.author_id, self.view.guild)
+            embed = view.build_embed()
+        elif self.destination == "customreact":
+            view = CustomReactView(self.view.author_id, self.view.guild)
             embed = view.build_embed()
         else:
             view = DashboardView(self.view.author_id, self.view.guild)
@@ -1426,8 +1429,8 @@ class AutoMsgView(BaseView):
 
 
 # ── REACTION AUTOMATICHE ──────────────────────────────────────────────────────
-def _parse_emojis(testo, guild=None):
-    """Estrae fino a 5 emoji. Accetta unicode, <:nome:id> e anche solo il NOME
+def _parse_emojis(testo, guild=None, maxn=5):
+    """Estrae fino a maxn emoji. Accetta unicode, <:nome:id> e anche solo il NOME
     (es. 'fuoco' o ':fuoco:') risolvendolo tra le emoji del server."""
     out = []
     for tok in (testo or "").split():
@@ -1439,11 +1442,11 @@ def _parse_emojis(testo, guild=None):
             match = next((e for e in guild.emojis if e.name.lower() == name.lower()), None)
             if match:
                 out.append(str(match))
-                if len(out) >= 5:
+                if len(out) >= maxn:
                     break
                 continue
         out.append(tok)
-        if len(out) >= 5:
+        if len(out) >= maxn:
             break
     return out
 
@@ -2081,12 +2084,23 @@ class CustomReactMaxSelect(discord.ui.Select):
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
+class CustomReactUserPick(discord.ui.UserSelect):
+    def __init__(self):
+        super().__init__(placeholder="✏️ Modifica le emoji di un utente...",
+                         min_values=1, max_values=1, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = UserEmojiEditView(self.view.author_id, self.view.guild, self.values[0].id)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
 class CustomReactView(BaseView):
     def __init__(self, author_id, guild):
         super().__init__(author_id, guild)
         cr = db.get_log_config(guild.id).get("profile", {}).get("custom_react", {})
         self.add_item(CustomReactRolesSelect())
         self.add_item(CustomReactMaxSelect(cr.get("max", 3)))
+        self.add_item(CustomReactUserPick())
         self.add_item(BackButton("profile"))
 
     def build_embed(self) -> discord.Embed:
@@ -2096,11 +2110,128 @@ class CustomReactView(BaseView):
         embed = discord.Embed(
             title="⭐ Custom reactions",
             description="Chi ha uno dei ruoli abilitati sceglie le proprie emoji dal `+profile`; "
-                        "il bot reagisce ai suoi messaggi.",
+                        "il bot reagisce ai suoi messaggi.\n"
+                        "Puoi modificare le emoji di un utente anche da qui (sincronizzate col profilo).",
             color=BLU,
         )
         embed.add_field(name="Ruoli abilitati", value=testo, inline=False)
         embed.add_field(name="Max emoji a testa", value=str(cr.get("max", 3)), inline=False)
+        return embed
+
+
+# — editor emoji per-utente (stessa fonte dati del +profile) —
+class UserEmojiServerSelect(discord.ui.Select):
+    def __init__(self, guild, user_id, current, maxn, page=0):
+        self.user_id = user_id
+        self.page = page
+        self.maxn = maxn
+        emojis = guild.emojis
+        chunk = emojis[page * 25:page * 25 + 25]
+        self._page_strs = {str(e) for e in chunk}
+        cur = set(current)
+        options = [discord.SelectOption(label=e.name[:100], value=str(e), emoji=e, default=str(e) in cur)
+                   for e in chunk]
+        tot = max(1, (len(emojis) + 24) // 25)
+        ph = (f"😀 Emoji dal server (max {maxn}) — pag {page + 1}/{tot}"
+              if tot > 1 else f"😀 Scegli emoji dal server (max {maxn})...")
+        super().__init__(placeholder=ph, min_values=0, max_values=min(maxn, len(options)) or 1,
+                         options=options or [discord.SelectOption(label="—")], row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        prof = db.get_user_profile(self.user_id)
+        altri = [e for e in prof.get("custom_emojis", []) if e not in self._page_strs]
+        prof["custom_emojis"] = (altri + list(self.values))[:self.maxn]
+        db.save_user_profile(self.user_id, prof)
+        v = UserEmojiEditView(self.view.author_id, self.view.guild, self.user_id, self.page)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class UserEmojiPageButton(discord.ui.Button):
+    def __init__(self, delta, label):
+        super().__init__(label=label, style=discord.ButtonStyle.secondary, row=1)
+        self.delta = delta
+
+    async def callback(self, interaction: discord.Interaction):
+        v = self.view
+        tot = max(1, (len(v.guild.emojis) + 24) // 25)
+        new_page = max(0, min(tot - 1, v.emoji_page + self.delta))
+        nv = UserEmojiEditView(v.author_id, v.guild, v.user_id, new_page)
+        await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
+
+
+class UserEmojiManualModal(discord.ui.Modal, title="Emoji a mano"):
+    def __init__(self, author_id, guild, user_id, maxn):
+        super().__init__()
+        self.author_id = author_id
+        self.guild = guild
+        self.user_id = user_id
+        self.maxn = maxn
+        cur = db.get_user_profile(user_id).get("custom_emojis", [])
+        self.box = discord.ui.TextInput(
+            label=f"Emoji o nomi (max {maxn}, separati da spazio)", required=False,
+            default=" ".join(cur), placeholder="😀  :nome:  fuoco  <:custom:123>", max_length=200)
+        self.add_item(self.box)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        prof = db.get_user_profile(self.user_id)
+        prof["custom_emojis"] = _parse_emojis(self.box.value, self.guild, self.maxn)
+        db.save_user_profile(self.user_id, prof)
+        v = UserEmojiEditView(self.author_id, self.guild, self.user_id)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class UserEmojiManualButton(discord.ui.Button):
+    def __init__(self, maxn):
+        super().__init__(label="🔤 Emoji a mano", style=discord.ButtonStyle.secondary, row=1)
+        self.maxn = maxn
+
+    async def callback(self, interaction: discord.Interaction):
+        v = self.view
+        await interaction.response.send_modal(
+            UserEmojiManualModal(v.author_id, v.guild, v.user_id, self.maxn))
+
+
+class UserEmojiClearButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="🗑️ Rimuovi", style=discord.ButtonStyle.secondary, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        prof = db.get_user_profile(self.view.user_id)
+        prof["custom_emojis"] = []
+        db.save_user_profile(self.view.user_id, prof)
+        v = UserEmojiEditView(self.view.author_id, self.view.guild, self.view.user_id)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class UserEmojiEditView(BaseView):
+    def __init__(self, author_id, guild, user_id, emoji_page=0):
+        super().__init__(author_id, guild)
+        self.user_id = user_id
+        self.emoji_page = emoji_page
+        maxn = custom_react_max(db.get_log_config(guild.id))
+        cur = db.get_user_profile(user_id).get("custom_emojis", [])
+        if guild.emojis:
+            self.add_item(UserEmojiServerSelect(guild, user_id, cur, maxn, emoji_page))
+            if len(guild.emojis) > 25:
+                self.add_item(UserEmojiPageButton(-1, "◀ Emoji"))
+                self.add_item(UserEmojiPageButton(1, "Emoji ▶"))
+        self.add_item(UserEmojiManualButton(maxn))
+        self.add_item(UserEmojiClearButton())
+        self.add_item(BackButton("customreact"))
+
+    def build_embed(self) -> discord.Embed:
+        cur = db.get_user_profile(self.user_id).get("custom_emojis", [])
+        maxn = custom_react_max(db.get_log_config(self.guild.id))
+        member = self.guild.get_member(self.user_id)
+        nome = member.display_name if member else f"utente {self.user_id}"
+        embed = discord.Embed(
+            title=f"⭐ Emoji di {nome}",
+            description=f"Le emoji con cui il bot reagisce ai suoi messaggi (max **{maxn}**).\n"
+                        "Sincronizzate col suo `+profile`.",
+            color=BLU,
+        )
+        embed.add_field(name="Attuali", value=" ".join(cur) if cur else "*Nessuna*", inline=False)
+        embed.set_footer(text="Emoji dal menu (server) oppure 'Emoji a mano' per unicode/altre.")
         return embed
 
 

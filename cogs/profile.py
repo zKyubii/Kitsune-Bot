@@ -256,54 +256,102 @@ class PrivacyView(_ProfileBase):
 
 
 # ── CUSTOM REACTIONS ───────────────────────────────────────────────────────
-class ReactModal(discord.ui.Modal, title="Custom Reactions"):
-    def __init__(self, member, guild, author_id, maxn):
-        super().__init__()
-        self.member = member
-        self.guild = guild
-        self.author_id = author_id
+def parse_emojis(testo, guild, maxn):
+    """Estrae fino a maxn emoji: unicode, <:nome:id> o solo il NOME (es. 'fuoco')."""
+    out = []
+    for tok in (testo or "").split():
+        tok = tok.strip()
+        if not tok:
+            continue
+        if guild and not tok.startswith("<"):
+            name = tok.strip(":")
+            match = next((e for e in guild.emojis if e.name.lower() == name.lower()), None)
+            if match:
+                out.append(str(match))
+                if len(out) >= maxn:
+                    break
+                continue
+        out.append(tok)
+        if len(out) >= maxn:
+            break
+    return out
+
+
+class ReactServerEmojiSelect(discord.ui.Select):
+    def __init__(self, guild, current, maxn, page=0):
+        self.page = page
         self.maxn = maxn
+        emojis = guild.emojis
+        chunk = emojis[page * 25:page * 25 + 25]
+        self._page_strs = {str(e) for e in chunk}
+        cur = set(current)
+        options = [discord.SelectOption(label=e.name[:100], value=str(e), emoji=e, default=str(e) in cur)
+                   for e in chunk]
+        tot = max(1, (len(emojis) + 24) // 25)
+        ph = (f"😀 Emoji dal server (max {maxn}) — pag {page + 1}/{tot}"
+              if tot > 1 else f"😀 Scegli emoji dal server (max {maxn})...")
+        super().__init__(placeholder=ph, min_values=0, max_values=min(maxn, len(options)) or 1,
+                         options=options or [discord.SelectOption(label="—")], row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = self.view
+        prof = db.get_user_profile(v.member.id)
+        # conserva le emoji scelte in altre pagine / a mano, aggiorna solo questa pagina
+        altri = [e for e in prof.get("custom_emojis", []) if e not in self._page_strs]
+        prof["custom_emojis"] = (altri + list(self.values))[:self.maxn]
+        db.save_user_profile(v.member.id, prof)
+        nv = ReactView(v.author_id, v.guild, v.member, self.page)
+        await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
+
+
+class ReactPageButton(discord.ui.Button):
+    def __init__(self, delta, label):
+        super().__init__(label=label, style=discord.ButtonStyle.secondary, row=2)
+        self.delta = delta
+
+    async def callback(self, interaction: discord.Interaction):
+        v = self.view
+        tot = max(1, (len(v.guild.emojis) + 24) // 25)
+        new_page = max(0, min(tot - 1, v.emoji_page + self.delta))
+        nv = ReactView(v.author_id, v.guild, v.member, new_page)
+        await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
+
+
+class ReactManualModal(discord.ui.Modal, title="Emoji a mano"):
+    def __init__(self, author_id, guild, member, maxn):
+        super().__init__()
+        self.author_id = author_id
+        self.guild = guild
+        self.member = member
+        self.maxn = maxn
+        cur = db.get_user_profile(member.id).get("custom_emojis", [])
         self.box = discord.ui.TextInput(
-            label=f"Emoji (max {maxn}, separate da spazio)",
-            placeholder="😎 🔥 <:nome:123456789>",
-            required=False, max_length=200, style=discord.TextStyle.short,
-        )
+            label=f"Emoji o nomi (max {maxn}, separati da spazio)", required=False,
+            default=" ".join(cur), placeholder="😀  :nome:  fuoco  <:custom:123>", max_length=200)
         self.add_item(self.box)
 
     async def on_submit(self, interaction: discord.Interaction):
-        raw = (self.box.value or "").split()
-        valid = []
-        for tok in raw:
-            try:
-                discord.PartialEmoji.from_str(tok)
-                valid.append(tok)
-            except Exception:
-                continue
-            if len(valid) >= self.maxn:
-                break
         prof = db.get_user_profile(self.member.id)
-        prof["custom_emojis"] = valid
+        prof["custom_emojis"] = parse_emojis(self.box.value, self.guild, self.maxn)
         db.save_user_profile(self.member.id, prof)
         nv = ReactView(self.author_id, self.guild, self.member)
         await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
 
 
-class ReactSetButton(discord.ui.Button):
+class ReactManualButton(discord.ui.Button):
     def __init__(self, maxn):
-        super().__init__(label="Imposta emoji", emoji="✏️",
-                         style=discord.ButtonStyle.primary, row=1)
+        super().__init__(label="🔤 Emoji a mano", style=discord.ButtonStyle.secondary, row=2)
         self.maxn = maxn
 
     async def callback(self, interaction: discord.Interaction):
         v = self.view
         await interaction.response.send_modal(
-            ReactModal(v.member, v.guild, v.author_id, self.maxn))
+            ReactManualModal(v.author_id, v.guild, v.member, self.maxn))
 
 
 class ReactClearButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Rimuovi", emoji="🗑️",
-                         style=discord.ButtonStyle.secondary, row=1)
+        super().__init__(label="🗑️ Rimuovi", style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         prof = self.view._prof()
@@ -314,10 +362,19 @@ class ReactClearButton(discord.ui.Button):
 
 
 class ReactView(_ProfileBase):
-    def __init__(self, author_id, guild, member):
+    def __init__(self, author_id, guild, member, emoji_page=0):
         super().__init__(author_id, guild, member, "react")
-        if logconfig.custom_react_allowed(self._config(), member):
-            self.add_item(ReactSetButton(logconfig.custom_react_max(self._config())))
+        self.emoji_page = emoji_page
+        config = self._config()
+        if logconfig.custom_react_allowed(config, member):
+            maxn = logconfig.custom_react_max(config)
+            cur = self._prof().get("custom_emojis", [])
+            if guild.emojis:
+                self.add_item(ReactServerEmojiSelect(guild, cur, maxn, emoji_page))
+                if len(guild.emojis) > 25:
+                    self.add_item(ReactPageButton(-1, "◀ Emoji"))
+                    self.add_item(ReactPageButton(1, "Emoji ▶"))
+            self.add_item(ReactManualButton(maxn))
             self.add_item(ReactClearButton())
         self.add_item(CloseButton())
 
@@ -336,6 +393,8 @@ class ReactView(_ProfileBase):
                 f"Il bot reagisce ai tuoi messaggi con le emoji che scegli (max **{maxn}**).\n\n"
                 f"**Attuali:** {' '.join(emojis) if emojis else 'Nessuna'}"
             )
+            e.set_footer(text="Emoji dal menu (server) oppure 'Emoji a mano' per unicode/altre.")
+            return e
         e.set_footer(text="Kitsune • Profilo")
         return e
 

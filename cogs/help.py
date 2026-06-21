@@ -17,7 +17,7 @@ PAGINE = [
             ("`+av` | `+avuser`", "Avatar del server / del profilo di un utente."),
             ("`+banner` | `+banneruser`", "Banner del server / del profilo di un utente."),
             ("`+quote`", "Rispondi a un messaggio e scrivi `+quote` per farne una citazione."),
-            ("`+profile` | `+profilo`", "Apri il tuo profilo: privacy, vocale privata, custom reactions."),
+            ("`+profile`", "Apri il tuo profilo: privacy, ruoli, custom reactions."),
             ("`+help`", "Mostra questa lista (o `+help <comando>` per i dettagli)."),
         ]),
         ("Minigiochi", [
