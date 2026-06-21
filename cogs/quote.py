@@ -303,8 +303,10 @@ class Quote(commands.Cog):
         dest = _destinazione(guild, fallback_channel)
         autore = src_message.author
         av = await autore.display_avatar.replace(size=512).read()
-        view = QuoteView(av, src_message.content, autore.display_name, f"@{autore.name}", autore_id)
-        buf = await asyncio.to_thread(genera_quote, av, src_message.content, view.nome, view.handle, view.opts)
+        # clean_content rende le menzioni leggibili: <@123> → @NomeNelServer, #canale, @ruolo
+        testo = src_message.clean_content or src_message.content
+        view = QuoteView(av, testo, autore.display_name, f"@{autore.name}", autore_id)
+        buf = await asyncio.to_thread(genera_quote, av, testo, view.nome, view.handle, view.opts)
         msg = await dest.send(file=discord.File(buf, filename="quote.png"), view=view)
         view.message = msg
         return dest
@@ -351,10 +353,6 @@ class Quote(commands.Cog):
             return
 
         await self._pubblica(message.guild, message.channel, ref, message.author.id)
-        try:
-            await message.delete()
-        except (discord.Forbidden, discord.HTTPException):
-            pass
 
 
 async def setup(bot):

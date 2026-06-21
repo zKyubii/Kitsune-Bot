@@ -554,8 +554,10 @@ class Logs(commands.Cog):
                 if diff:
                     nome = target.mention if hasattr(target, "mention") else str(target)
                     lines.append(f"**{nome}:**\n" + "\n".join(diff))
-            e = _emb(ORANGE, "🔐 Channel Permissions Updated", after.mention, lines[:12] or None)
-            await self._send(after.guild, "channels", "permissions", e, source_channel_id=after.id)
+            # Solo se ci sono modifiche reali: evita il log "vuoto" che usciva prima
+            if lines:
+                e = _emb(ORANGE, "🔐 Channel Permissions Updated", after.mention, lines[:12])
+                await self._send(after.guild, "channels", "permissions", e, source_channel_id=after.id)
 
     @staticmethod
     def _perm_diff(before_ow, after_ow):
