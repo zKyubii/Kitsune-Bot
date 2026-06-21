@@ -1,8 +1,12 @@
+import re
+
 import discord
 from discord.ext import commands
 
 import database as db
 import logconfig
+
+_MENTION_RE = re.compile(r"<@!?(\d+)>")
 
 
 class AutoReact(commands.Cog):
@@ -25,7 +29,9 @@ class AutoReact(commands.Cog):
             return
 
         content = (message.content or "").lower().strip()
-        mentioned = {m.id for m in message.mentions}
+        # solo i tag scritti davvero nel testo (esclude il "ping" automatico
+        # che Discord aggiunge quando si risponde a un messaggio)
+        mentioned = {int(uid) for uid in _MENTION_RE.findall(message.content or "")}
         for rule in rules:
             if not self._match(rule, content, mentioned):
                 continue
