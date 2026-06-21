@@ -1420,8 +1420,26 @@ class AutoMsgView(BaseView):
 
 
 # ── REACTION AUTOMATICHE ──────────────────────────────────────────────────────
-def _parse_emojis(testo):
-    return [tok for tok in (testo or "").split()][:5]
+def _parse_emojis(testo, guild=None):
+    """Estrae fino a 5 emoji. Accetta unicode, <:nome:id> e anche solo il NOME
+    (es. 'fuoco' o ':fuoco:') risolvendolo tra le emoji del server."""
+    out = []
+    for tok in (testo or "").split():
+        tok = tok.strip()
+        if not tok:
+            continue
+        if guild and not tok.startswith("<"):
+            name = tok.strip(":")
+            match = next((e for e in guild.emojis if e.name.lower() == name.lower()), None)
+            if match:
+                out.append(str(match))
+                if len(out) >= 5:
+                    break
+                continue
+        out.append(tok)
+        if len(out) >= 5:
+            break
+    return out
 
 
 def _autoreact_get(config, rule_id):
@@ -1432,7 +1450,24 @@ def _autoreact_get(config, rule_id):
 
 
 def _autoreact_new_id(rules):
-    return max((r.get("id", 0) for r in rules), default=0) + 1
+    return max((r.get("id", 0) for r in rules if isinstance(r.get("id"), int)), default=0) + 1
+
+
+def _autoreact_ensure_ids(guild_id):
+    """Assegna un id alle regole vecchie che non ce l'hanno (fix 'interaction failed')."""
+    config = db.get_log_config(guild_id)
+    rules = config.get("autoreact", {}).get("rules", [])
+    if not rules:
+        return
+    nxt = _autoreact_new_id(rules)
+    changed = False
+    for r in rules:
+        if not isinstance(r.get("id"), int):
+            r["id"] = nxt
+            nxt += 1
+            changed = True
+    if changed:
+        db.save_log_config(guild_id, config)
 
 
 # — aggiunta regole —
@@ -1442,20 +1477,16 @@ class AutoReactWordModal(discord.ui.Modal, title="Reaction su parola"):
         self.author_id = author_id
         self.guild = guild
         self.parola = discord.ui.TextInput(label="Parola / frase", max_length=100)
-        self.solo = discord.ui.TextInput(label="Solo se è SOLO quella parola? (si/no)",
-                                         default="no", max_length=3)
         self.add_item(self.parola)
-        self.add_item(self.solo)
 
     async def on_submit(self, interaction: discord.Interaction):
         if not self.parola.value.strip():
             return await interaction.response.send_message("❌ Scrivi una parola.", ephemeral=True)
         config = db.get_log_config(interaction.guild_id)
         rules = config.setdefault("autoreact", {}).setdefault("rules", [])
-        mode = "exact" if self.solo.value.strip().lower() in ("si", "sì", "yes", "y", "1") else "contains"
         rid = _autoreact_new_id(rules)
         rules.append({"id": rid, "type": "word", "trigger": self.parola.value.strip(),
-                      "mode": mode, "emojis": []})
+                      "mode": "contains", "emojis": []})
         db.save_log_config(interaction.guild_id, config)
         v = RuleEditView(self.author_id, self.guild, rid)
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
@@ -1470,7 +1501,8 @@ class AutoReactUserSelect(discord.ui.UserSelect):
         config = db.get_log_config(interaction.guild_id)
         rules = config.setdefault("autoreact", {}).setdefault("rules", [])
         rid = _autoreact_new_id(rules)
-        rules.append({"id": rid, "type": "mention", "trigger": str(self.values[0].id), "emojis": []})
+        rules.append({"id": rid, "type": "mention", "trigger": str(self.values[0].id),
+                      "mode": "contains", "emojis": []})
         db.save_log_config(interaction.guild_id, config)
         v = RuleEditView(self.view.author_id, self.view.guild, rid)
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
@@ -1547,43 +1579,64 @@ class AutoReactManageSelect(discord.ui.Select):
 
 # — modifica di una singola regola —
 class ServerEmojiSelect(discord.ui.Select):
-    def __init__(self, guild, rule):
+    def __init__(self, guild, rule, page=0):
         self.rule_id = rule["id"]
+        self.page = page
+        emojis = guild.emojis
+        chunk = emojis[page * 25:page * 25 + 25]
+        self._page_strs = {str(e) for e in chunk}
         current = set(rule.get("emojis", []))
-        options = []
-        for e in guild.emojis[:25]:
-            s = str(e)
-            options.append(discord.SelectOption(label=e.name[:100], value=s, emoji=e, default=s in current))
-        super().__init__(placeholder="😀 Scegli emoji dal server (max 5)...",
-                         min_values=0, max_values=min(5, len(options)), options=options, row=0)
+        options = [discord.SelectOption(label=e.name[:100], value=str(e), emoji=e, default=str(e) in current)
+                   for e in chunk]
+        tot = max(1, (len(emojis) + 24) // 25)
+        ph = (f"😀 Emoji dal server (max 5) — pag {page + 1}/{tot}"
+              if tot > 1 else "😀 Scegli emoji dal server (max 5)...")
+        super().__init__(placeholder=ph, min_values=0, max_values=min(5, len(options)) or 1,
+                         options=options or [discord.SelectOption(label="—")], row=0)
 
     async def callback(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
         r = _autoreact_get(config, self.rule_id)
         if r is not None:
-            r["emojis"] = list(self.values)[:5]
+            # conserva le emoji scelte in altre pagine / a mano, aggiorna solo questa pagina
+            altri = [e for e in r.get("emojis", []) if e not in self._page_strs]
+            r["emojis"] = (altri + list(self.values))[:5]
             db.save_log_config(interaction.guild_id, config)
-        v = RuleEditView(self.view.author_id, self.view.guild, self.rule_id)
+        v = RuleEditView(self.view.author_id, self.view.guild, self.rule_id, self.page)
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
-class RuleEmojiModal(discord.ui.Modal, title="Emoji a mano"):
+class EmojiPageButton(discord.ui.Button):
+    def __init__(self, delta, label):
+        super().__init__(label=label, style=discord.ButtonStyle.secondary, row=1)
+        self.delta = delta
+
+    async def callback(self, interaction: discord.Interaction):
+        v = self.view
+        tot = max(1, (len(v.guild.emojis) + 24) // 25)
+        new_page = max(0, min(tot - 1, v.emoji_page + self.delta))
+        nv = RuleEditView(v.author_id, v.guild, v.rule_id, new_page)
+        await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
+
+
+class RuleEmojiModal(discord.ui.Modal, title="Emoji (scrivi o cerca)"):
     def __init__(self, author_id, guild, rule_id):
         super().__init__()
         self.author_id = author_id
         self.guild = guild
         self.rule_id = rule_id
         r = _autoreact_get(db.get_log_config(guild.id), rule_id) or {}
-        self.emoji = discord.ui.TextInput(label="Emoji (max 5, separate da spazio)", required=False,
-                                          default=" ".join(r.get("emojis", [])),
-                                          placeholder="😀 🔥 <:custom:123>", max_length=200)
+        self.emoji = discord.ui.TextInput(
+            label="Emoji o nomi (max 5, separati da spazio)", required=False,
+            default=" ".join(r.get("emojis", [])),
+            placeholder="😀  :nomeemoji:  fuoco  <:custom:123>", max_length=200)
         self.add_item(self.emoji)
 
     async def on_submit(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
         r = _autoreact_get(config, self.rule_id)
         if r is not None:
-            r["emojis"] = _parse_emojis(self.emoji.value)
+            r["emojis"] = _parse_emojis(self.emoji.value, self.guild)
             db.save_log_config(interaction.guild_id, config)
         v = RuleEditView(self.author_id, self.guild, self.rule_id)
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
@@ -1591,7 +1644,7 @@ class RuleEmojiModal(discord.ui.Modal, title="Emoji a mano"):
 
 class RuleEmojiTextButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="🔤 Emoji a mano", style=discord.ButtonStyle.secondary, row=1)
+        super().__init__(label="🔤 Emoji a mano", style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(
@@ -1606,17 +1659,13 @@ class RuleWordEditModal(discord.ui.Modal, title="Cambia parola"):
         self.rule_id = rule_id
         r = _autoreact_get(db.get_log_config(guild.id), rule_id) or {}
         self.parola = discord.ui.TextInput(label="Parola / frase", default=r.get("trigger", ""), max_length=100)
-        self.solo = discord.ui.TextInput(label="Solo se è SOLO quella parola? (si/no)",
-                                         default="si" if r.get("mode") == "exact" else "no", max_length=3)
         self.add_item(self.parola)
-        self.add_item(self.solo)
 
     async def on_submit(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
         r = _autoreact_get(config, self.rule_id)
         if r is not None and self.parola.value.strip():
             r["trigger"] = self.parola.value.strip()
-            r["mode"] = "exact" if self.solo.value.strip().lower() in ("si", "sì", "yes", "y", "1") else "contains"
             db.save_log_config(interaction.guild_id, config)
         v = RuleEditView(self.author_id, self.guild, self.rule_id)
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
@@ -1624,16 +1673,35 @@ class RuleWordEditModal(discord.ui.Modal, title="Cambia parola"):
 
 class RuleEditWordButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="✏️ Cambia parola", style=discord.ButtonStyle.secondary, row=1)
+        super().__init__(label="✏️ Cambia parola", style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(
             RuleWordEditModal(self.view.author_id, self.view.guild, self.view.rule_id))
 
 
+class RuleModeButton(discord.ui.Button):
+    def __init__(self, rule):
+        is_exact = rule.get("mode") == "exact"
+        if rule.get("type") == "mention":
+            stato = "solo il tag" if is_exact else "ovunque"
+        else:
+            stato = "solo la parola" if is_exact else "ovunque"
+        super().__init__(label=f"🔁 Modalità: {stato}", style=discord.ButtonStyle.secondary, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        r = _autoreact_get(config, self.view.rule_id)
+        if r is not None:
+            r["mode"] = "contains" if r.get("mode") == "exact" else "exact"
+            db.save_log_config(interaction.guild_id, config)
+        v = RuleEditView(self.view.author_id, self.view.guild, self.view.rule_id)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
 class RuleDeleteButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="🗑️ Elimina", style=discord.ButtonStyle.danger, row=1)
+        super().__init__(label="🗑️ Elimina", style=discord.ButtonStyle.danger, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
@@ -1645,18 +1713,23 @@ class RuleDeleteButton(discord.ui.Button):
 
 
 class RuleEditView(BaseView):
-    def __init__(self, author_id: int, guild: discord.Guild, rule_id: int):
+    def __init__(self, author_id: int, guild: discord.Guild, rule_id: int, emoji_page: int = 0):
         super().__init__(author_id, guild)
         self.rule_id = rule_id
+        self.emoji_page = emoji_page
         r = _autoreact_get(db.get_log_config(guild.id), rule_id)
         if r is not None:
             if guild.emojis:
-                self.add_item(ServerEmojiSelect(guild, r))
+                self.add_item(ServerEmojiSelect(guild, r, emoji_page))
+                if len(guild.emojis) > 25:
+                    self.add_item(EmojiPageButton(-1, "◀ Emoji"))
+                    self.add_item(EmojiPageButton(1, "Emoji ▶"))
             self.add_item(RuleEmojiTextButton())
+            self.add_item(RuleModeButton(r))
             if r.get("type") == "word":
                 self.add_item(RuleEditWordButton())
             self.add_item(RuleDeleteButton())
-        self.add_item(AutoReactBackButton())
+        self.add_item(AutoReactBackButton(row=3))
 
     def build_embed(self) -> discord.Embed:
         r = _autoreact_get(db.get_log_config(self.guild.id), self.rule_id) or {}
@@ -1675,6 +1748,7 @@ class RuleEditView(BaseView):
 class AutoReactView(BaseView):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(author_id, guild)
+        _autoreact_ensure_ids(guild.id)
         config = db.get_log_config(guild.id)
         feats = config.get("features", {})
         ar = config.get("autoreact", {})

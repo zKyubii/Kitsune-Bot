@@ -42,9 +42,15 @@ class AutoReact(commands.Cog):
     def _match(rule, content, mentioned) -> bool:
         if rule.get("type") == "mention":
             try:
-                return int(rule["trigger"]) in mentioned
+                uid = int(rule["trigger"])
             except (ValueError, KeyError, TypeError):
                 return False
+            if uid not in mentioned:
+                return False
+            if rule.get("mode") == "exact":
+                # "solo il tag": il messaggio è SOLO la menzione
+                return content in (f"<@{uid}>", f"<@!{uid}>")
+            return True
         trig = str(rule.get("trigger", "")).lower().strip()
         if not trig:
             return False
