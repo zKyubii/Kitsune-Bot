@@ -43,7 +43,7 @@ def _bool_label(blocked: bool) -> str:
 
 
 def _custom_emojis_line(member, guild, config, prof) -> str:
-    if not logconfig.custom_react_allowed(config, member.id):
+    if not logconfig.custom_react_allowed(config, member):
         return "Non abilitate"
     emojis = prof.get("custom_emojis", [])
     return " ".join(emojis) if emojis else "Non impostate"
@@ -52,7 +52,7 @@ def _custom_emojis_line(member, guild, config, prof) -> str:
 def build_home_embed(member: discord.Member, guild: discord.Guild,
                      config: dict, prof: dict) -> discord.Embed:
     e = discord.Embed(
-        title=f"🦊 Profilo di {member.display_name}",
+        title=f"🪪 Profilo di {member.display_name}",
         description="⭐ Mini guida per configurare il tuo profilo e le funzioni del bot.\n"
                     "Usa il menu a tendina qui sotto per spostarti tra le sezioni.",
         color=member.color if member.color.value else BLU,
@@ -89,17 +89,19 @@ def build_home_embed(member: discord.Member, guild: discord.Guild,
 
 # ── COMPONENTI ──────────────────────────────────────────────────────────────
 class SectionSelect(discord.ui.Select):
-    def __init__(self, current: str):
+    def __init__(self, current: str, show_react: bool, show_roles: bool):
         options = [
             discord.SelectOption(label="Home", emoji="🏠", value="home",
                                  default=(current == "home")),
             discord.SelectOption(label="Privacy", emoji="🔒", value="privacy",
                                  default=(current == "privacy")),
-            discord.SelectOption(label="Vocale Privata", emoji="🔊", value="voice",
-                                 default=(current == "voice")),
-            discord.SelectOption(label="Custom Reactions", emoji="⭐", value="react",
-                                 default=(current == "react")),
         ]
+        if show_roles:
+            options.append(discord.SelectOption(label="Ruoli", emoji="🎭",
+                                                value="roles", default=(current == "roles")))
+        if show_react:
+            options.append(discord.SelectOption(label="Custom Reactions", emoji="⭐",
+                                                value="react", default=(current == "react")))
         super().__init__(placeholder="Cambia sezione...", options=options, row=0)
 
     async def callback(self, interaction: discord.Interaction):
@@ -107,8 +109,8 @@ class SectionSelect(discord.ui.Select):
         dest = self.values[0]
         if dest == "privacy":
             nv = PrivacyView(v.author_id, v.guild, v.member)
-        elif dest == "voice":
-            nv = VoiceView(v.author_id, v.guild, v.member)
+        elif dest == "roles":
+            nv = RolesView(v.author_id, v.guild, v.member)
         elif dest == "react":
             nv = ReactView(v.author_id, v.guild, v.member)
         else:
@@ -134,7 +136,10 @@ class _ProfileBase(discord.ui.View):
         self.author_id = author_id
         self.guild = guild
         self.member = member
-        self.add_item(SectionSelect(current))
+        config = db.get_log_config(guild.id)
+        show_react = logconfig.custom_react_allowed(config, member)
+        show_roles = bool(logconfig.role_categories(config))
+        self.add_item(SectionSelect(current, show_react, show_roles))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author_id:
@@ -250,29 +255,6 @@ class PrivacyView(_ProfileBase):
         return e
 
 
-# ── VOCALE PRIVATA ─────────────────────────────────────────────────────────
-class VoiceView(_ProfileBase):
-    def __init__(self, author_id, guild, member):
-        super().__init__(author_id, guild, member, "voice")
-        self.add_item(CloseButton())
-
-    def build_embed(self):
-        vid = logconfig.private_voice_of(self._config(), self.member.id)
-        ch = self.guild.get_channel(vid) if vid else None
-        e = discord.Embed(
-            title="🔊 Vocale Privata",
-            color=self.member.color if self.member.color.value else BLU,
-        )
-        if ch:
-            e.description = (f"La tua vocale privata è {ch.mention}.\n"
-                            "Te l'ha assegnata lo staff: entra pure quando vuoi.")
-        else:
-            e.description = ("Non hai una vocale privata assegnata.\n"
-                            "Viene assegnata dallo staff (es. con il doppio boost).")
-        e.set_footer(text="Kitsune • Profilo")
-        return e
-
-
 # ── CUSTOM REACTIONS ───────────────────────────────────────────────────────
 class ReactModal(discord.ui.Modal, title="Custom Reactions"):
     def __init__(self, member, guild, author_id, maxn):
@@ -334,14 +316,14 @@ class ReactClearButton(discord.ui.Button):
 class ReactView(_ProfileBase):
     def __init__(self, author_id, guild, member):
         super().__init__(author_id, guild, member, "react")
-        if logconfig.custom_react_allowed(self._config(), member.id):
+        if logconfig.custom_react_allowed(self._config(), member):
             self.add_item(ReactSetButton(logconfig.custom_react_max(self._config())))
             self.add_item(ReactClearButton())
         self.add_item(CloseButton())
 
     def build_embed(self):
         config = self._config()
-        allowed = logconfig.custom_react_allowed(config, self.member.id)
+        allowed = logconfig.custom_react_allowed(config, self.member)
         e = discord.Embed(title="⭐ Custom Reactions",
                           color=self.member.color if self.member.color.value else BLU)
         if not allowed:
@@ -354,6 +336,135 @@ class ReactView(_ProfileBase):
                 f"Il bot reagisce ai tuoi messaggi con le emoji che scegli (max **{maxn}**).\n\n"
                 f"**Attuali:** {' '.join(emojis) if emojis else 'Nessuna'}"
             )
+        e.set_footer(text="Kitsune • Profilo")
+        return e
+
+
+# ── RUOLI (self-role a categorie) ──────────────────────────────────────────
+def _assignable(guild: discord.Guild, role: discord.Role) -> bool:
+    return bool(role) and not role.managed and not role.is_default() and role < guild.me.top_role
+
+
+def _safe_emoji(raw):
+    if not raw:
+        return None
+    try:
+        return discord.PartialEmoji.from_str(str(raw))
+    except Exception:
+        return None
+
+
+class RoleCategoryPicker(discord.ui.Select):
+    def __init__(self, cats: dict, current):
+        options = []
+        for cid, c in list(cats.items())[:25]:
+            options.append(discord.SelectOption(
+                label=c.get("name", "Categoria")[:100], value=cid,
+                description="Scelta singola" if c.get("single") else "Scelta multipla",
+                emoji=_safe_emoji(c.get("emoji")), default=(cid == current)))
+        super().__init__(placeholder="Scegli una categoria...", options=options, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = self.view
+        nv = RolesView(v.author_id, v.guild, v.member, self.values[0])
+        await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
+
+
+class RoleOptionSelect(discord.ui.Select):
+    def __init__(self, cat_id, cat, roles, member):
+        self.cat_id = cat_id
+        self.cat_role_ids = [r.id for r in roles]
+        single = cat.get("single", False)
+        member_ids = {r.id for r in member.roles}
+        options, scelto = [], False
+        for r in roles:
+            on = r.id in member_ids
+            if single and on and scelto:
+                on = False  # in scelta singola evidenzio un solo ruolo
+            if single and on:
+                scelto = True
+            options.append(discord.SelectOption(label=r.name[:100], value=str(r.id), default=on))
+        super().__init__(
+            placeholder=f"I tuoi ruoli • {cat.get('name', 'Categoria')}"[:150],
+            min_values=0, max_values=1 if single else len(options),
+            options=options, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = self.view
+        chosen = {int(x) for x in self.values}
+        add, remove = [], []
+        for rid in self.cat_role_ids:
+            role = v.guild.get_role(rid)
+            if not _assignable(v.guild, role):
+                continue
+            has = role in v.member.roles
+            if rid in chosen and not has:
+                add.append(role)
+            elif rid not in chosen and has:
+                remove.append(role)
+        try:
+            if add:
+                await v.member.add_roles(*add, reason="+profile ruoli")
+            if remove:
+                await v.member.remove_roles(*remove, reason="+profile ruoli")
+        except discord.HTTPException:
+            pass
+        nv = RolesView(v.author_id, v.guild, v.member, self.cat_id)
+        await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
+
+
+class RoleClearButton(discord.ui.Button):
+    def __init__(self, cat_id):
+        super().__init__(label="Rimuovi ruoli", emoji="🗑️",
+                         style=discord.ButtonStyle.secondary, row=3)
+        self.cat_id = cat_id
+
+    async def callback(self, interaction: discord.Interaction):
+        v = self.view
+        cat = logconfig.role_categories(db.get_log_config(v.guild.id)).get(self.cat_id, {})
+        remove = [r for r in (v.guild.get_role(rid) for rid in cat.get("roles", []))
+                  if r and r in v.member.roles and _assignable(v.guild, r)]
+        if remove:
+            try:
+                await v.member.remove_roles(*remove, reason="+profile rimuovi ruoli")
+            except discord.HTTPException:
+                pass
+        nv = RolesView(v.author_id, v.guild, v.member, self.cat_id)
+        await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
+
+
+class RolesView(_ProfileBase):
+    def __init__(self, author_id, guild, member, cat_id=None):
+        super().__init__(author_id, guild, member, "roles")
+        cats = logconfig.role_categories(self._config())
+        if cat_id not in cats:
+            cat_id = next(iter(cats), None)
+        self.cat_id = cat_id
+        if cats:
+            self.add_item(RoleCategoryPicker(cats, cat_id))
+        if cat_id:
+            roles = [r for r in (guild.get_role(rid) for rid in cats[cat_id].get("roles", [])) if r]
+            if roles:
+                self.add_item(RoleOptionSelect(cat_id, cats[cat_id], roles, member))
+                self.add_item(RoleClearButton(cat_id))
+        self.add_item(CloseButton())
+
+    def build_embed(self):
+        cats = logconfig.role_categories(self._config())
+        e = discord.Embed(title="🎭 Ruoli",
+                          color=self.member.color if self.member.color.value else BLU)
+        if not cats:
+            e.description = "Nessuna categoria di ruoli configurata dallo staff."
+            e.set_footer(text="Kitsune • Profilo")
+            return e
+        cat = cats.get(self.cat_id, {})
+        modo = "scelta singola" if cat.get("single") else "scelta multipla"
+        e.description = ("Scegli la **categoria** dal menu, poi i tuoi ruoli.\n"
+                         f"Categoria attuale: **{cat.get('name', '—')}** ({modo}).")
+        roles = [r for r in (self.guild.get_role(rid) for rid in cat.get("roles", [])) if r]
+        miei = [r.mention for r in roles if r in self.member.roles]
+        e.add_field(name="I tuoi ruoli qui",
+                    value=" ".join(miei) if miei else "*Nessuno*", inline=False)
         e.set_footer(text="Kitsune • Profilo")
         return e
 
@@ -386,7 +497,7 @@ class Profile(commands.Cog):
         config = db.get_log_config(message.guild.id)
         if not logconfig.feature_enabled(config, "profile"):
             return
-        if not logconfig.custom_react_allowed(config, message.author.id):
+        if not logconfig.custom_react_allowed(config, message.author):
             return
         emojis = db.get_user_profile(message.author.id).get("custom_emojis", [])
         for raw in emojis[:logconfig.custom_react_max(config)]:

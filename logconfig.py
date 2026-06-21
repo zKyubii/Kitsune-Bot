@@ -73,7 +73,7 @@ FEATURES = {
 # Config per-server salvata in log_config["profile"]:
 #   privacy_bypass_roles: [role_id]                ruoli che ignorano la privacy altrui
 #   private_voices:       {channel_id: user_id}    vocali assegnate manualmente
-#   custom_react:         {"allowed": [user_id], "max": int}
+#   custom_react:         {"allowed_roles": [role_id], "max": int}
 #   primary_roles:        {user_id: role_id}        ruolo "primario" mostrato
 def profile_cfg(config: dict) -> dict:
     return config.get("profile", {})
@@ -91,8 +91,12 @@ def private_voice_of(config: dict, user_id: int):
     return None
 
 
-def custom_react_allowed(config: dict, user_id: int) -> bool:
-    return user_id in profile_cfg(config).get("custom_react", {}).get("allowed", [])
+def custom_react_allowed(config: dict, member) -> bool:
+    """True se il membro ha uno dei ruoli abilitati alle custom reactions."""
+    allowed = profile_cfg(config).get("custom_react", {}).get("allowed_roles", [])
+    if not allowed:
+        return False
+    return any(r.id in allowed for r in getattr(member, "roles", []))
 
 
 def custom_react_max(config: dict) -> int:
@@ -102,6 +106,11 @@ def custom_react_max(config: dict) -> int:
 def primary_role_of(config: dict, user_id: int):
     rid = profile_cfg(config).get("primary_roles", {}).get(str(user_id))
     return int(rid) if rid else None
+
+
+def role_categories(config: dict) -> dict:
+    """{cat_id: {name, emoji, single, roles:[role_id]}} — categorie di self-role."""
+    return profile_cfg(config).get("role_categories", {})
 
 
 # ── ANTISPAM ──────────────────────────────────────────────────────────────────
