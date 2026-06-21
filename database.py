@@ -84,6 +84,11 @@ def init_db():
             xp        INTEGER DEFAULT 0,
             PRIMARY KEY (guild_id, user_id)
         );
+
+        CREATE TABLE IF NOT EXISTS user_profile (
+            user_id  INTEGER PRIMARY KEY,
+            data     TEXT
+        );
     """)
     conn.commit()
 
@@ -357,3 +362,27 @@ def level_rank(guild_id: int, user_id: int) -> int:
         (guild_id, guild_id, user_id),
     ).fetchone()
     return row["r"] if row else 1
+
+
+# ── PROFILO UTENTE (globale, non legato al server) ──────────────────────────
+def get_user_profile(user_id: int) -> dict:
+    row = conn.execute(
+        "SELECT data FROM user_profile WHERE user_id = ?", (user_id,)
+    ).fetchone()
+    if row and row["data"]:
+        try:
+            return json.loads(row["data"])
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def save_user_profile(user_id: int, data: dict):
+    conn.execute(
+        """
+        INSERT INTO user_profile (user_id, data) VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET data = excluded.data
+        """,
+        (user_id, json.dumps(data)),
+    )
+    conn.commit()

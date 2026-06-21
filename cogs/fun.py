@@ -484,7 +484,7 @@ class PairConfirmView(discord.ui.View):
                 it.disabled = True
             try:
                 await self.message.edit(
-                    content=f"⏳ {self.partner.mention} non ha accettato in tempo. Riprovate con `/ship`!",
+                    content=f"⏳ {self.partner.mention} non ha accettato in tempo.",
                     view=self)
             except (discord.HTTPException, discord.NotFound):
                 pass

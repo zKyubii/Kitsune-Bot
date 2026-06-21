@@ -17,6 +17,7 @@ PAGINE = [
             ("`+av` | `+avuser`", "Avatar del server / del profilo di un utente."),
             ("`+banner` | `+banneruser`", "Banner del server / del profilo di un utente."),
             ("`+quote`", "Rispondi a un messaggio e scrivi `+quote` per farne una citazione."),
+            ("`+profile` | `+profilo`", "Apri il tuo profilo: privacy, vocale privata, custom reactions."),
             ("`+help`", "Mostra questa lista (o `+help <comando>` per i dettagli)."),
         ]),
         ("Minigiochi", [
@@ -41,6 +42,8 @@ DETTAGLI = {
     "banner": ("`+banner <@utente>`", "Mostra il banner del server o, se non c'è, del profilo."),
     "banneruser": ("`+banneruser <@utente>`", "Mostra il banner del profilo (globale)."),
     "quote": ("`+quote` (in risposta)", "Rispondi a un messaggio con `+quote` per trasformarlo in citazione."),
+    "profile": ("`+profile <@utente>`", "Apri il tuo profilo (privacy avatar/banner/quote, vocale privata, custom reactions). Con un tag mostri la home di un altro."),
+    "profilo": ("`+profilo <@utente>`", "Alias di `+profile`: apri il tuo profilo."),
     "help": ("`+help [comando]`", "Mostra tutti i comandi, o i dettagli di uno specifico."),
     "rps": ("`+rps <sasso/carta/forbice>`", "Sasso carta forbice contro il bot."),
     "ship": ("`+ship @utente1 <@utente2>`", "Compatibilità amorosa tra due utenti (taggane 1 o 2)."),

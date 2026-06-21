@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw, ImageFont
 import database as db
 import logconfig
 from cogs.fun import _segmenta, _render_emoji
+from cogs.profile import privacy_blocked, privacy_notify
 
 W, H = 1000, 500
 TRIGGER = ("+quote", "?quote")
@@ -322,6 +323,11 @@ class Quote(commands.Cog):
             await interaction.response.send_message(
                 "❌ Questo messaggio non ha testo da citare.", ephemeral=True)
             return
+        if privacy_blocked(interaction.guild, interaction.user, message.author, "quote"):
+            await interaction.response.send_message(
+                f"🔒 {message.author.display_name} ha la privacy attiva sulle quote.",
+                ephemeral=True)
+            return
 
         await interaction.response.defer(ephemeral=True)
         dest = await self._pubblica(interaction.guild, interaction.channel, message, interaction.user.id)
@@ -350,6 +356,12 @@ class Quote(commands.Cog):
                 return
         if not ref.content:
             await message.channel.send("❌ Quel messaggio non ha testo da citare.", delete_after=5)
+            return
+        if privacy_blocked(message.guild, message.author, ref.author, "quote"):
+            if privacy_notify(ref.author):
+                await message.channel.send(
+                    f"🔒 {ref.author.display_name} ha la privacy attiva sulle quote.",
+                    delete_after=5)
             return
 
         await self._pubblica(message.guild, message.channel, ref, message.author.id)

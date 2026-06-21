@@ -55,6 +55,9 @@ class BackButton(discord.ui.Button):
         elif self.destination == "levels":
             view = LevelsView(self.view.author_id, self.view.guild)
             embed = view.build_embed()
+        elif self.destination == "profile":
+            view = ProfileDashView(self.view.author_id, self.view.guild)
+            embed = view.build_embed()
         else:
             view = DashboardView(self.view.author_id, self.view.guild)
             embed = build_main_embed(self.view.guild, db.get_log_config(self.view.guild.id))
@@ -1798,6 +1801,8 @@ def _feature_view(key: str, author_id: int, guild: discord.Guild):
         return AutoMsgView(author_id, guild)
     if key == "autoreact":
         return AutoReactView(author_id, guild)
+    if key == "profile":
+        return ProfileDashView(author_id, guild)
     return FeatureDetailView(author_id, guild, key)
 
 
@@ -1858,6 +1863,322 @@ class FeaturesView(BaseView):
             color=BLU,
         )
         embed.add_field(name="Stato", value="\n".join(righe), inline=False)
+        return embed
+
+
+# ── PROFILO UTENTE ────────────────────────────────────────────────────────────
+def _profile_cfg(guild_id: int):
+    config = db.get_log_config(guild_id)
+    return config, config.setdefault("profile", {})
+
+
+class ProfileSectionSelect(discord.ui.Select):
+    def __init__(self):
+        opts = [
+            ("🛡️ Bypass privacy", "bypass", "Ruoli che vedono avatar/banner/quote di tutti"),
+            ("🔊 Vocali private", "voices", "Collega un canale vocale a un utente"),
+            ("⭐ Custom reactions", "react", "Utenti abilitati e numero max di emoji"),
+            ("🏅 Ruolo primario", "primary", "Ruolo speciale mostrato nel profilo"),
+        ]
+        super().__init__(placeholder="Apri una sotto-sezione...", row=1,
+                         options=[discord.SelectOption(label=l, value=v, description=d) for l, v, d in opts])
+
+    async def callback(self, interaction: discord.Interaction):
+        m = {"bypass": BypassRolesView, "voices": PrivateVoiceView,
+             "react": CustomReactView, "primary": PrimaryRoleView}
+        v = m[self.values[0]](self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class ProfileDashView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        feats = db.get_log_config(guild.id).get("features", {})
+        self.add_item(FeatureToggleButton("profile", feats.get("profile", True)))
+        self.add_item(ProfileSectionSelect())
+        self.add_item(BackButton("features"))
+
+    def build_embed(self) -> discord.Embed:
+        config, prof = _profile_cfg(self.guild.id)
+        attiva = "🟢 Attiva" if config.get("features", {}).get("profile", True) else "🔴 Disattivata"
+        bypass = prof.get("privacy_bypass_roles", [])
+        voices = prof.get("private_voices", {})
+        allowed = prof.get("custom_react", {}).get("allowed", [])
+        primary = prof.get("primary_roles", {})
+        embed = discord.Embed(
+            title="👤 Profilo utente",
+            description="Comando `+profile`. Da qui gestisci i permessi e le assegnazioni.",
+            color=BLU,
+        )
+        embed.add_field(name="Stato", value=attiva, inline=False)
+        embed.add_field(name="🛡️ Bypass privacy", value=f"{len(bypass)} ruoli", inline=True)
+        embed.add_field(name="🔊 Vocali private", value=f"{len(voices)} assegnate", inline=True)
+        embed.add_field(name="⭐ Custom reactions", value=f"{len(allowed)} utenti", inline=True)
+        embed.add_field(name="🏅 Ruoli primari", value=f"{len(primary)} assegnati", inline=True)
+        embed.set_footer(text="Scegli una sotto-sezione dal menu")
+        return embed
+
+
+class BypassRolesSelect(discord.ui.RoleSelect):
+    def __init__(self, current):
+        super().__init__(placeholder="Ruoli che ignorano la privacy altrui...",
+                         min_values=0, max_values=10, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        config, prof = _profile_cfg(interaction.guild_id)
+        prof["privacy_bypass_roles"] = [r.id for r in self.values]
+        db.save_log_config(interaction.guild_id, config)
+        v = BypassRolesView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class BypassRolesView(BaseView):
+    def __init__(self, author_id, guild):
+        super().__init__(author_id, guild)
+        prof = db.get_log_config(guild.id).get("profile", {})
+        self.add_item(BypassRolesSelect(prof.get("privacy_bypass_roles", [])))
+        self.add_item(BackButton("profile"))
+
+    def build_embed(self) -> discord.Embed:
+        prof = db.get_log_config(self.guild.id).get("profile", {})
+        ids = prof.get("privacy_bypass_roles", [])
+        testo = " ".join(f"<@&{r}>" for r in ids) if ids else "*Nessuno (solo l'interessato vede)*"
+        embed = discord.Embed(
+            title="🛡️ Bypass privacy",
+            description="Questi ruoli possono vedere **avatar/banner/quote** anche di chi ha la privacy attiva.",
+            color=BLU,
+        )
+        embed.add_field(name="Ruoli abilitati", value=testo, inline=False)
+        return embed
+
+
+class PrivateVoiceChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self):
+        super().__init__(placeholder="1️⃣ Canale vocale...", row=0,
+                         channel_types=[discord.ChannelType.voice], min_values=1, max_values=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.pending_channel = self.values[0].id
+        await interaction.response.edit_message(embed=self.view.build_embed(), view=self.view)
+
+
+class PrivateVoiceUserSelect(discord.ui.UserSelect):
+    def __init__(self):
+        super().__init__(placeholder="2️⃣ Utente a cui assegnarla...", row=1, min_values=1, max_values=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.pending_user = self.values[0].id
+        await interaction.response.edit_message(embed=self.view.build_embed(), view=self.view)
+
+
+class PrivateVoiceLinkButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Collega", emoji="🔗", style=discord.ButtonStyle.success, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = self.view
+        if not v.pending_channel or not v.pending_user:
+            await interaction.response.send_message(
+                "❌ Scegli prima un canale e un utente.", ephemeral=True)
+            return
+        config, prof = _profile_cfg(interaction.guild_id)
+        voices = prof.setdefault("private_voices", {})
+        # un canale → un utente, e un utente → un canale soltanto
+        voices = {c: u for c, u in voices.items()
+                  if c != str(v.pending_channel) and u != v.pending_user}
+        voices[str(v.pending_channel)] = v.pending_user
+        prof["private_voices"] = voices
+        db.save_log_config(interaction.guild_id, config)
+        v.pending_channel = v.pending_user = None
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class PrivateVoiceRemoveSelect(discord.ui.Select):
+    def __init__(self, guild, voices):
+        options = []
+        for cid, uid in list(voices.items())[:25]:
+            ch = guild.get_channel(int(cid))
+            options.append(discord.SelectOption(
+                label=(ch.name if ch else f"canale {cid}")[:80], value=str(cid),
+                description=f"Assegnata a un utente ({uid})"))
+        super().__init__(placeholder="🗑️ Rimuovi un'assegnazione...", row=3,
+                         options=options or [discord.SelectOption(label="—", value="_")],
+                         disabled=not options)
+
+    async def callback(self, interaction: discord.Interaction):
+        config, prof = _profile_cfg(interaction.guild_id)
+        prof.get("private_voices", {}).pop(self.values[0], None)
+        db.save_log_config(interaction.guild_id, config)
+        v = PrivateVoiceView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class PrivateVoiceView(BaseView):
+    def __init__(self, author_id, guild):
+        super().__init__(author_id, guild)
+        self.pending_channel = None
+        self.pending_user = None
+        voices = db.get_log_config(guild.id).get("profile", {}).get("private_voices", {})
+        self.add_item(PrivateVoiceChannelSelect())
+        self.add_item(PrivateVoiceUserSelect())
+        self.add_item(PrivateVoiceLinkButton())
+        self.add_item(PrivateVoiceRemoveSelect(guild, voices))
+        self.add_item(BackButton("profile"))
+
+    def build_embed(self) -> discord.Embed:
+        voices = db.get_log_config(self.guild.id).get("profile", {}).get("private_voices", {})
+        if voices:
+            righe = []
+            for cid, uid in voices.items():
+                ch = self.guild.get_channel(int(cid))
+                nome = ch.mention if ch else f"`canale {cid}`"
+                righe.append(f"{nome} → <@{uid}>")
+            testo = "\n".join(righe)
+        else:
+            testo = "*Nessuna vocale assegnata.*"
+        embed = discord.Embed(
+            title="🔊 Vocali private",
+            description="Crea tu il canale, poi scegli **canale + utente** e premi Collega.",
+            color=BLU,
+        )
+        embed.add_field(name="Assegnazioni", value=testo, inline=False)
+        if self.pending_channel or self.pending_user:
+            c = f"<#{self.pending_channel}>" if self.pending_channel else "?"
+            u = f"<@{self.pending_user}>" if self.pending_user else "?"
+            embed.add_field(name="✏️ In attesa", value=f"{c} → {u}", inline=False)
+        return embed
+
+
+class CustomReactUsersSelect(discord.ui.UserSelect):
+    def __init__(self):
+        super().__init__(placeholder="Utenti abilitati alle custom reactions...",
+                         min_values=0, max_values=25, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        config, prof = _profile_cfg(interaction.guild_id)
+        cr = prof.setdefault("custom_react", {})
+        cr["allowed"] = [u.id for u in self.values]
+        db.save_log_config(interaction.guild_id, config)
+        v = CustomReactView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class CustomReactMaxSelect(discord.ui.Select):
+    def __init__(self, current):
+        opts = [discord.SelectOption(label=f"{n} emoji", value=str(n), default=(n == current))
+                for n in range(1, 6)]
+        super().__init__(placeholder="Numero massimo di emoji...", row=1, options=opts)
+
+    async def callback(self, interaction: discord.Interaction):
+        config, prof = _profile_cfg(interaction.guild_id)
+        prof.setdefault("custom_react", {})["max"] = int(self.values[0])
+        db.save_log_config(interaction.guild_id, config)
+        v = CustomReactView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class CustomReactView(BaseView):
+    def __init__(self, author_id, guild):
+        super().__init__(author_id, guild)
+        cr = db.get_log_config(guild.id).get("profile", {}).get("custom_react", {})
+        self.add_item(CustomReactUsersSelect())
+        self.add_item(CustomReactMaxSelect(cr.get("max", 3)))
+        self.add_item(BackButton("profile"))
+
+    def build_embed(self) -> discord.Embed:
+        cr = db.get_log_config(self.guild.id).get("profile", {}).get("custom_react", {})
+        allowed = cr.get("allowed", [])
+        testo = " ".join(f"<@{u}>" for u in allowed) if allowed else "*Nessuno*"
+        embed = discord.Embed(
+            title="⭐ Custom reactions",
+            description="Gli utenti abilitati scelgono le proprie emoji dal `+profile`; "
+                        "il bot reagisce ai loro messaggi.",
+            color=BLU,
+        )
+        embed.add_field(name="Utenti abilitati", value=testo, inline=False)
+        embed.add_field(name="Max emoji a testa", value=str(cr.get("max", 3)), inline=False)
+        return embed
+
+
+class PrimaryRoleUserSelect(discord.ui.UserSelect):
+    def __init__(self):
+        super().__init__(placeholder="1️⃣ Utente...", row=0, min_values=1, max_values=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.pending_user = self.values[0].id
+        await interaction.response.edit_message(embed=self.view.build_embed(), view=self.view)
+
+
+class PrimaryRoleRoleSelect(discord.ui.RoleSelect):
+    def __init__(self):
+        super().__init__(placeholder="2️⃣ Ruolo primario...", row=1, min_values=1, max_values=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.pending_role = self.values[0].id
+        await interaction.response.edit_message(embed=self.view.build_embed(), view=self.view)
+
+
+class PrimaryRoleAssignButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Assegna", emoji="✅", style=discord.ButtonStyle.success, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = self.view
+        if not v.pending_user or not v.pending_role:
+            await interaction.response.send_message(
+                "❌ Scegli prima un utente e un ruolo.", ephemeral=True)
+            return
+        config, prof = _profile_cfg(interaction.guild_id)
+        prof.setdefault("primary_roles", {})[str(v.pending_user)] = v.pending_role
+        db.save_log_config(interaction.guild_id, config)
+        v.pending_user = v.pending_role = None
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class PrimaryRoleRemoveSelect(discord.ui.Select):
+    def __init__(self, primary):
+        options = [discord.SelectOption(label=f"utente {uid}", value=str(uid))
+                   for uid in list(primary.keys())[:25]]
+        super().__init__(placeholder="🗑️ Rimuovi un'assegnazione...", row=3,
+                         options=options or [discord.SelectOption(label="—", value="_")],
+                         disabled=not options)
+
+    async def callback(self, interaction: discord.Interaction):
+        config, prof = _profile_cfg(interaction.guild_id)
+        prof.get("primary_roles", {}).pop(self.values[0], None)
+        db.save_log_config(interaction.guild_id, config)
+        v = PrimaryRoleView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class PrimaryRoleView(BaseView):
+    def __init__(self, author_id, guild):
+        super().__init__(author_id, guild)
+        self.pending_user = None
+        self.pending_role = None
+        primary = db.get_log_config(guild.id).get("profile", {}).get("primary_roles", {})
+        self.add_item(PrimaryRoleUserSelect())
+        self.add_item(PrimaryRoleRoleSelect())
+        self.add_item(PrimaryRoleAssignButton())
+        self.add_item(PrimaryRoleRemoveSelect(primary))
+        self.add_item(BackButton("profile"))
+
+    def build_embed(self) -> discord.Embed:
+        primary = db.get_log_config(self.guild.id).get("profile", {}).get("primary_roles", {})
+        if primary:
+            testo = "\n".join(f"<@{uid}> → <@&{rid}>" for uid, rid in primary.items())
+        else:
+            testo = "*Nessuna assegnazione.*"
+        embed = discord.Embed(
+            title="🏅 Ruolo primario",
+            description="Il ruolo speciale mostrato in cima al `+profile` dell'utente.",
+            color=BLU,
+        )
+        embed.add_field(name="Assegnazioni", value=testo, inline=False)
+        if self.pending_user or self.pending_role:
+            u = f"<@{self.pending_user}>" if self.pending_user else "?"
+            r = f"<@&{self.pending_role}>" if self.pending_role else "?"
+            embed.add_field(name="✏️ In attesa", value=f"{u} → {r}", inline=False)
         return embed
 
 

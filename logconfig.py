@@ -65,7 +65,43 @@ FEATURES = {
     "partnership": "🤝 Partnership",
     "automsg": "📨 Auto Message",
     "autoreact": "⭐ Reaction automatiche",
+    "profile": "👤 Profilo utente",
 }
+
+
+# ── PROFILO UTENTE ──────────────────────────────────────────────────────────
+# Config per-server salvata in log_config["profile"]:
+#   privacy_bypass_roles: [role_id]                ruoli che ignorano la privacy altrui
+#   private_voices:       {channel_id: user_id}    vocali assegnate manualmente
+#   custom_react:         {"allowed": [user_id], "max": int}
+#   primary_roles:        {user_id: role_id}        ruolo "primario" mostrato
+def profile_cfg(config: dict) -> dict:
+    return config.get("profile", {})
+
+
+def privacy_bypass_roles(config: dict) -> list:
+    return profile_cfg(config).get("privacy_bypass_roles", [])
+
+
+def private_voice_of(config: dict, user_id: int):
+    """Id del canale vocale assegnato all'utente, se esiste."""
+    for cid, uid in profile_cfg(config).get("private_voices", {}).items():
+        if uid == user_id:
+            return int(cid)
+    return None
+
+
+def custom_react_allowed(config: dict, user_id: int) -> bool:
+    return user_id in profile_cfg(config).get("custom_react", {}).get("allowed", [])
+
+
+def custom_react_max(config: dict) -> int:
+    return profile_cfg(config).get("custom_react", {}).get("max", 3)
+
+
+def primary_role_of(config: dict, user_id: int):
+    rid = profile_cfg(config).get("primary_roles", {}).get(str(user_id))
+    return int(rid) if rid else None
 
 
 # ── ANTISPAM ──────────────────────────────────────────────────────────────────

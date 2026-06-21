@@ -1,7 +1,19 @@
 import discord
 from discord.ext import commands
 
+from cogs.profile import privacy_blocked, privacy_notify
+
 BLU = 0x5865F2
+
+
+async def _privacy_stop(ctx, target, kind: str) -> bool:
+    """True (e avvisa) se 'target' ha bloccato avatar/banner a chi esegue il comando."""
+    if not privacy_blocked(ctx.guild, ctx.author, target, kind):
+        return False
+    if privacy_notify(target):
+        etichetta = "l'avatar" if kind == "avatar" else "il banner"
+        await ctx.send(f"🔒 {target.display_name} ha la privacy attiva su {etichetta}.")
+    return True
 
 
 def _url(asset: discord.Asset) -> str:
@@ -28,6 +40,8 @@ class Avatar(commands.Cog):
     async def av(self, ctx: commands.Context, target: discord.Member = None):
         """Avatar del SERVER (quello che hai nel server)."""
         target = target or ctx.author
+        if await _privacy_stop(ctx, target, "avatar"):
+            return
         await ctx.send(embed=self._embed(target, "Server Avatar", target.display_avatar))
 
     @commands.command(name="avuser")
@@ -35,6 +49,8 @@ class Avatar(commands.Cog):
     async def avuser(self, ctx: commands.Context, target: discord.Member = None):
         """Avatar del PROFILO (globale)."""
         target = target or ctx.author
+        if await _privacy_stop(ctx, target, "avatar"):
+            return
         glob = target.avatar or target.default_avatar
         await ctx.send(embed=self._embed(target, "Avatar", glob))
 
@@ -44,6 +60,8 @@ class Avatar(commands.Cog):
     async def banner(self, ctx: commands.Context, target: discord.Member = None):
         """Banner del SERVER (se impostato), altrimenti quello del profilo."""
         target = target or ctx.author
+        if await _privacy_stop(ctx, target, "banner"):
+            return
         asset = target.guild_banner
         titolo = "Server Banner"
         if asset is None:
@@ -60,6 +78,8 @@ class Avatar(commands.Cog):
     async def banneruser(self, ctx: commands.Context, target: discord.Member = None):
         """Banner del PROFILO (globale)."""
         target = target or ctx.author
+        if await _privacy_stop(ctx, target, "banner"):
+            return
         user = await self.bot.fetch_user(target.id)
         if user.banner is None:
             await ctx.send(f"❌ {target.display_name} non ha un banner sul profilo.")
