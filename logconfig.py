@@ -63,7 +63,7 @@ FEATURES = {
     "confession": "🤫 Confession",
     "quote": "💬 Quote",
     "partnership": "🤝 Partnership",
-    "daily": "🌅 Buongiorno/Buonanotte",
+    "automsg": "📨 Auto Message",
     "autoreact": "⭐ Reaction automatiche",
 }
 

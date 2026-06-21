@@ -1253,7 +1253,7 @@ class PartnershipSettingsView(BaseView):
         return embed
 
 
-# ── BUONGIORNO / BUONANOTTE ───────────────────────────────────────────────────
+# ── AUTO MESSAGE (messaggi automatici a orario) ───────────────────────────────
 def _valida_ora(s, default):
     s = (s or "").strip()
     try:
@@ -1266,86 +1266,155 @@ def _valida_ora(s, default):
     return default
 
 
-class DailyChannelSelect(discord.ui.ChannelSelect):
+def _automsg_get(config, msg_id):
+    for m in config.get("automsg", {}).get("messages", []):
+        if m.get("id") == msg_id:
+            return m
+    return None
+
+
+class AutoMsgChannelSelect(discord.ui.ChannelSelect):
     def __init__(self):
-        super().__init__(placeholder="📢 Canale dei messaggi giornalieri...",
+        super().__init__(placeholder="📢 Canale degli auto-message...",
                          channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
-        config.setdefault("daily", {})["channel"] = self.values[0].id
+        config.setdefault("automsg", {})["channel"] = self.values[0].id
         db.save_log_config(interaction.guild_id, config)
-        v = DailySettingsView(self.view.author_id, self.view.guild)
+        v = AutoMsgView(self.view.author_id, self.view.guild)
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
-class DailyEditModal(discord.ui.Modal, title="Buongiorno / Buonanotte"):
-    def __init__(self, author_id, guild):
-        super().__init__()
+class AutoMsgModal(discord.ui.Modal):
+    def __init__(self, author_id, guild, msg_id=None):
+        super().__init__(title="Auto Message")
         self.author_id = author_id
         self.guild = guild
-        d = db.get_log_config(guild.id).get("daily", {})
-        self.mt = discord.ui.TextInput(label="Ora buongiorno (HH:MM, ora IT)",
-                                       default=d.get("morning_time", "08:00"), max_length=5)
-        self.nt = discord.ui.TextInput(label="Ora buonanotte (HH:MM, ora IT)",
-                                       default=d.get("night_time", "00:00"), max_length=5)
-        self.mm = discord.ui.TextInput(label="Messaggio buongiorno", style=discord.TextStyle.paragraph,
-                                       required=False, max_length=500, default=d.get("morning_msg", ""),
-                                       placeholder="☀️ Buongiorno {server}!")
-        self.nm = discord.ui.TextInput(label="Messaggio buonanotte", style=discord.TextStyle.paragraph,
-                                       required=False, max_length=500, default=d.get("night_msg", ""),
-                                       placeholder="🌙 Buonanotte a tutti!")
-        for it in (self.mt, self.nt, self.mm, self.nm):
+        self.msg_id = msg_id
+        ex = (_automsg_get(db.get_log_config(guild.id), msg_id) or {}) if msg_id is not None else {}
+        self.titolo = discord.ui.TextInput(label="Titolo (per ricordartelo)", max_length=100,
+                                           default=ex.get("title", ""), placeholder="es. Buongiorno")
+        self.orario = discord.ui.TextInput(label="Orario (HH:MM, ora IT)", max_length=5,
+                                           default=ex.get("time", "08:00"))
+        self.messaggio = discord.ui.TextInput(label="Messaggio", style=discord.TextStyle.paragraph,
+                                              max_length=1500, default=ex.get("message", ""),
+                                              placeholder="☀️ Buongiorno {server}!")
+        for it in (self.titolo, self.orario, self.messaggio):
             self.add_item(it)
 
     async def on_submit(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
-        dd = config.setdefault("daily", {})
-        dd["morning_time"] = _valida_ora(self.mt.value, "08:00")
-        dd["night_time"] = _valida_ora(self.nt.value, "00:00")
-        dd["morning_msg"] = self.mm.value
-        dd["night_msg"] = self.nm.value
+        msgs = config.setdefault("automsg", {}).setdefault("messages", [])
+        ora = _valida_ora(self.orario.value, "08:00")
+        titolo = self.titolo.value.strip() or "Senza titolo"
+        if self.msg_id is not None:
+            m = _automsg_get(config, self.msg_id)
+            if m:
+                m["title"], m["time"], m["message"] = titolo, ora, self.messaggio.value
+        else:
+            new_id = max((m.get("id", 0) for m in msgs), default=0) + 1
+            msgs.append({"id": new_id, "title": titolo, "time": ora, "message": self.messaggio.value})
         db.save_log_config(interaction.guild_id, config)
-        v = DailySettingsView(self.author_id, self.guild)
+        v = AutoMsgView(self.author_id, self.guild)
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
-class DailyEditButton(discord.ui.Button):
+class AutoMsgAddButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="✏️ Orari & Messaggi", style=discord.ButtonStyle.secondary, row=0)
+        super().__init__(label="➕ Aggiungi messaggio", style=discord.ButtonStyle.success, row=0)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(DailyEditModal(self.view.author_id, self.view.guild))
+        await interaction.response.send_modal(AutoMsgModal(self.view.author_id, self.view.guild))
 
 
-class DailySettingsView(BaseView):
+class AutoMsgManageSelect(discord.ui.Select):
+    def __init__(self, messages):
+        options = [discord.SelectOption(label=f"{m.get('title', '?')} ({m.get('time', '?')})"[:100],
+                                        value=str(m.get("id"))) for m in messages[:25]]
+        super().__init__(placeholder="✏️ Modifica / elimina un messaggio...", options=options, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = AutoMsgEditView(self.view.author_id, self.view.guild, int(self.values[0]))
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class AutoMsgEditButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="✏️ Modifica", style=discord.ButtonStyle.secondary, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(
+            AutoMsgModal(self.view.author_id, self.view.guild, self.view.msg_id))
+
+
+class AutoMsgDeleteButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="🗑️ Elimina", style=discord.ButtonStyle.danger, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        msgs = config.setdefault("automsg", {}).setdefault("messages", [])
+        config["automsg"]["messages"] = [m for m in msgs if m.get("id") != self.view.msg_id]
+        db.save_log_config(interaction.guild_id, config)
+        v = AutoMsgView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class AutoMsgBackButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Indietro", emoji="⬅️", style=discord.ButtonStyle.secondary, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = AutoMsgView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class AutoMsgEditView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild, msg_id: int):
+        super().__init__(author_id, guild)
+        self.msg_id = msg_id
+        self.add_item(AutoMsgEditButton())
+        self.add_item(AutoMsgDeleteButton())
+        self.add_item(AutoMsgBackButton())
+
+    def build_embed(self) -> discord.Embed:
+        m = _automsg_get(db.get_log_config(self.guild.id), self.msg_id) or {}
+        embed = discord.Embed(title=f"📨 {m.get('title', '?')}", color=BLU)
+        embed.add_field(name="🕐 Orario", value=m.get("time", "?"), inline=False)
+        embed.add_field(name="💬 Messaggio", value=(m.get("message") or "*vuoto*")[:1000], inline=False)
+        return embed
+
+
+class AutoMsgView(BaseView):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(author_id, guild)
-        feats = db.get_log_config(guild.id).get("features", {})
-        self.add_item(FeatureToggleButton("daily", feats.get("daily", True)))
-        self.add_item(DailyEditButton())
-        self.add_item(DailyChannelSelect())
+        config = db.get_log_config(guild.id)
+        feats = config.get("features", {})
+        msgs = config.get("automsg", {}).get("messages", [])
+        self.add_item(FeatureToggleButton("automsg", feats.get("automsg", True)))
+        self.add_item(AutoMsgAddButton())
+        self.add_item(AutoMsgChannelSelect())
+        if msgs:
+            self.add_item(AutoMsgManageSelect(msgs))
         self.add_item(BackButton("features"))
 
     def build_embed(self) -> discord.Embed:
         config = db.get_log_config(self.guild.id)
         feats = config.get("features", {})
-        d = config.get("daily", {})
-        attiva = "🟢 Attiva" if feats.get("daily", True) else "🔴 Disattivata"
-        ch = self.guild.get_channel(d.get("channel")) if d.get("channel") else None
+        am = config.get("automsg", {})
+        attiva = "🟢 Attiva" if feats.get("automsg", True) else "🔴 Disattivata"
+        ch = self.guild.get_channel(am.get("channel")) if am.get("channel") else None
+        righe = [f"• **{m.get('title')}** — {m.get('time')}" for m in am.get("messages", [])]
         embed = discord.Embed(
-            title="🌅 Buongiorno / Buonanotte",
-            description="Messaggi automatici inviati a orari fissi (**ora italiana**, gestisce anche l'ora legale).",
+            title="📨 Auto Message",
+            description=("Messaggi automatici inviati a un orario fisso (**ora italiana**).\n"
+                         "Aggiungine quanti vuoi: ognuno ha **titolo**, **orario** e **testo**."),
             color=BLU,
         )
         embed.add_field(name="Stato", value=attiva, inline=False)
         embed.add_field(name="📢 Canale", value=ch.mention if ch else "❌ non impostato", inline=False)
-        embed.add_field(name="☀️ Buongiorno",
-                        value=f"**{d.get('morning_time', '08:00')}** — {(d.get('morning_msg') or 'messaggio di default')[:80]}",
-                        inline=False)
-        embed.add_field(name="🌙 Buonanotte",
-                        value=f"**{d.get('night_time', '00:00')}** — {(d.get('night_msg') or 'messaggio di default')[:80]}",
-                        inline=False)
+        embed.add_field(name="Messaggi", value="\n".join(righe)[:1000] if righe else "*nessuno*", inline=False)
         embed.add_field(name="Variabili", value="`{server}` · `{membercount}`", inline=False)
         return embed
 
@@ -1355,6 +1424,18 @@ def _parse_emojis(testo):
     return [tok for tok in (testo or "").split()][:5]
 
 
+def _autoreact_get(config, rule_id):
+    for r in config.get("autoreact", {}).get("rules", []):
+        if r.get("id") == rule_id:
+            return r
+    return None
+
+
+def _autoreact_new_id(rules):
+    return max((r.get("id", 0) for r in rules), default=0) + 1
+
+
+# — aggiunta regole —
 class AutoReactWordModal(discord.ui.Modal, title="Reaction su parola"):
     def __init__(self, author_id, guild):
         super().__init__()
@@ -1363,65 +1444,52 @@ class AutoReactWordModal(discord.ui.Modal, title="Reaction su parola"):
         self.parola = discord.ui.TextInput(label="Parola / frase", max_length=100)
         self.solo = discord.ui.TextInput(label="Solo se è SOLO quella parola? (si/no)",
                                          default="no", max_length=3)
-        self.emoji = discord.ui.TextInput(label="Emoji (max 5, separate da spazio)",
-                                          placeholder="😀 🔥 <:custom:123>", max_length=200)
-        for it in (self.parola, self.solo, self.emoji):
-            self.add_item(it)
+        self.add_item(self.parola)
+        self.add_item(self.solo)
 
     async def on_submit(self, interaction: discord.Interaction):
-        emojis = _parse_emojis(self.emoji.value)
-        if self.parola.value.strip() and emojis:
-            config = db.get_log_config(interaction.guild_id)
-            rules = config.setdefault("autoreact", {}).setdefault("rules", [])
-            mode = "exact" if self.solo.value.strip().lower() in ("si", "sì", "yes", "y", "1") else "contains"
-            rules.append({"type": "word", "trigger": self.parola.value.strip(),
-                          "mode": mode, "emojis": emojis})
-            db.save_log_config(interaction.guild_id, config)
-        v = AutoReactView(self.author_id, self.guild)
+        if not self.parola.value.strip():
+            return await interaction.response.send_message("❌ Scrivi una parola.", ephemeral=True)
+        config = db.get_log_config(interaction.guild_id)
+        rules = config.setdefault("autoreact", {}).setdefault("rules", [])
+        mode = "exact" if self.solo.value.strip().lower() in ("si", "sì", "yes", "y", "1") else "contains"
+        rid = _autoreact_new_id(rules)
+        rules.append({"id": rid, "type": "word", "trigger": self.parola.value.strip(),
+                      "mode": mode, "emojis": []})
+        db.save_log_config(interaction.guild_id, config)
+        v = RuleEditView(self.author_id, self.guild, rid)
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
-class AutoReactUserEmojiModal(discord.ui.Modal, title="Reaction su utente pingato"):
-    def __init__(self, author_id, guild, user_id):
-        super().__init__()
-        self.author_id = author_id
-        self.guild = guild
-        self.user_id = user_id
-        self.emoji = discord.ui.TextInput(label="Emoji (max 5, separate da spazio)",
-                                          placeholder="😀 🔥 <:custom:123>", max_length=200)
-        self.add_item(self.emoji)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        emojis = _parse_emojis(self.emoji.value)
-        if emojis:
-            config = db.get_log_config(interaction.guild_id)
-            rules = config.setdefault("autoreact", {}).setdefault("rules", [])
-            rules.append({"type": "mention", "trigger": str(self.user_id), "emojis": emojis})
-            db.save_log_config(interaction.guild_id, config)
-        await interaction.response.edit_message(
-            content="✅ Reaction aggiunta! Torna su **Reaction automatiche** per vederla.", view=None)
-
-
 class AutoReactUserSelect(discord.ui.UserSelect):
-    def __init__(self, author_id, guild):
-        super().__init__(placeholder="Scegli l'utente da reagire quando viene pingato...",
-                         min_values=1, max_values=1)
-        self.author_id = author_id
-        self.guild = guild
+    def __init__(self):
+        super().__init__(placeholder="Scegli l'utente (reagisce quando viene pingato)...",
+                         min_values=1, max_values=1, row=0)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(
-            AutoReactUserEmojiModal(self.author_id, self.guild, self.values[0].id))
+        config = db.get_log_config(interaction.guild_id)
+        rules = config.setdefault("autoreact", {}).setdefault("rules", [])
+        rid = _autoreact_new_id(rules)
+        rules.append({"id": rid, "type": "mention", "trigger": str(self.values[0].id), "emojis": []})
+        db.save_log_config(interaction.guild_id, config)
+        v = RuleEditView(self.view.author_id, self.view.guild, rid)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
-class AutoReactUserView(discord.ui.View):
+class AutoReactBackButton(discord.ui.Button):
+    def __init__(self, row=1):
+        super().__init__(label="Indietro", emoji="⬅️", style=discord.ButtonStyle.secondary, row=row)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = AutoReactView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class AutoReactAddUserView(BaseView):
     def __init__(self, author_id, guild):
-        super().__init__(timeout=120)
-        self.author_id = author_id
-        self.add_item(AutoReactUserSelect(author_id, guild))
-
-    async def interaction_check(self, interaction):
-        return interaction.user.id == self.author_id
+        super().__init__(author_id, guild)
+        self.add_item(AutoReactUserSelect())
+        self.add_item(AutoReactBackButton())
 
 
 class AutoReactAddWordButton(discord.ui.Button):
@@ -1437,8 +1505,10 @@ class AutoReactAddUserButton(discord.ui.Button):
         super().__init__(label="➕ @Utente", style=discord.ButtonStyle.success, row=0)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            "Scegli l'utente:", view=AutoReactUserView(self.view.author_id, self.view.guild), ephemeral=True)
+        v = AutoReactAddUserView(self.view.author_id, self.view.guild)
+        embed = discord.Embed(title="➕ Reaction su utente",
+                              description="Scegli l'utente: il bot reagirà quando viene **pingato**.", color=BLU)
+        await interaction.response.edit_message(embed=embed, view=v)
 
 
 class AutoReactBlacklistSelect(discord.ui.ChannelSelect):
@@ -1456,30 +1526,150 @@ class AutoReactBlacklistSelect(discord.ui.ChannelSelect):
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
-class AutoReactRemoveSelect(discord.ui.Select):
+class AutoReactManageSelect(discord.ui.Select):
     def __init__(self, guild, rules):
         options = []
-        for i, r in enumerate(rules[:25]):
-            emo = " ".join(r.get("emojis", []))[:30]
+        for r in rules[:25]:
+            emo = " ".join(r.get("emojis", []))[:20] or "no emoji"
             if r.get("type") == "mention":
                 member = guild.get_member(int(r["trigger"])) if str(r.get("trigger", "")).isdigit() else None
-                etichetta = f"@{member.display_name if member else r['trigger']} → {emo}"
+                lab = f"@{member.display_name if member else r['trigger']} → {emo}"
             else:
                 modo = "esatta" if r.get("mode") == "exact" else "contiene"
-                etichetta = f"'{r.get('trigger')}' ({modo}) → {emo}"
-            options.append(discord.SelectOption(label=etichetta[:100], value=str(i)))
-        super().__init__(placeholder="🗑️ Rimuovi una reaction...",
-                         options=options or [discord.SelectOption(label="—")], row=2)
+                lab = f"'{r.get('trigger')}' ({modo}) → {emo}"
+            options.append(discord.SelectOption(label=lab[:100], value=str(r.get("id"))))
+        super().__init__(placeholder="✏️ Modifica una reaction...", options=options, row=2)
 
     async def callback(self, interaction: discord.Interaction):
-        idx = int(self.values[0])
+        v = RuleEditView(self.view.author_id, self.view.guild, int(self.values[0]))
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+# — modifica di una singola regola —
+class ServerEmojiSelect(discord.ui.Select):
+    def __init__(self, guild, rule):
+        self.rule_id = rule["id"]
+        current = set(rule.get("emojis", []))
+        options = []
+        for e in guild.emojis[:25]:
+            s = str(e)
+            options.append(discord.SelectOption(label=e.name[:100], value=s, emoji=e, default=s in current))
+        super().__init__(placeholder="😀 Scegli emoji dal server (max 5)...",
+                         min_values=0, max_values=min(5, len(options)), options=options, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        r = _autoreact_get(config, self.rule_id)
+        if r is not None:
+            r["emojis"] = list(self.values)[:5]
+            db.save_log_config(interaction.guild_id, config)
+        v = RuleEditView(self.view.author_id, self.view.guild, self.rule_id)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class RuleEmojiModal(discord.ui.Modal, title="Emoji a mano"):
+    def __init__(self, author_id, guild, rule_id):
+        super().__init__()
+        self.author_id = author_id
+        self.guild = guild
+        self.rule_id = rule_id
+        r = _autoreact_get(db.get_log_config(guild.id), rule_id) or {}
+        self.emoji = discord.ui.TextInput(label="Emoji (max 5, separate da spazio)", required=False,
+                                          default=" ".join(r.get("emojis", [])),
+                                          placeholder="😀 🔥 <:custom:123>", max_length=200)
+        self.add_item(self.emoji)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        r = _autoreact_get(config, self.rule_id)
+        if r is not None:
+            r["emojis"] = _parse_emojis(self.emoji.value)
+            db.save_log_config(interaction.guild_id, config)
+        v = RuleEditView(self.author_id, self.guild, self.rule_id)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class RuleEmojiTextButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="🔤 Emoji a mano", style=discord.ButtonStyle.secondary, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(
+            RuleEmojiModal(self.view.author_id, self.view.guild, self.view.rule_id))
+
+
+class RuleWordEditModal(discord.ui.Modal, title="Cambia parola"):
+    def __init__(self, author_id, guild, rule_id):
+        super().__init__()
+        self.author_id = author_id
+        self.guild = guild
+        self.rule_id = rule_id
+        r = _autoreact_get(db.get_log_config(guild.id), rule_id) or {}
+        self.parola = discord.ui.TextInput(label="Parola / frase", default=r.get("trigger", ""), max_length=100)
+        self.solo = discord.ui.TextInput(label="Solo se è SOLO quella parola? (si/no)",
+                                         default="si" if r.get("mode") == "exact" else "no", max_length=3)
+        self.add_item(self.parola)
+        self.add_item(self.solo)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        r = _autoreact_get(config, self.rule_id)
+        if r is not None and self.parola.value.strip():
+            r["trigger"] = self.parola.value.strip()
+            r["mode"] = "exact" if self.solo.value.strip().lower() in ("si", "sì", "yes", "y", "1") else "contains"
+            db.save_log_config(interaction.guild_id, config)
+        v = RuleEditView(self.author_id, self.guild, self.rule_id)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class RuleEditWordButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="✏️ Cambia parola", style=discord.ButtonStyle.secondary, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(
+            RuleWordEditModal(self.view.author_id, self.view.guild, self.view.rule_id))
+
+
+class RuleDeleteButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="🗑️ Elimina", style=discord.ButtonStyle.danger, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
         rules = config.setdefault("autoreact", {}).setdefault("rules", [])
-        if 0 <= idx < len(rules):
-            rules.pop(idx)
-            db.save_log_config(interaction.guild_id, config)
+        config["autoreact"]["rules"] = [r for r in rules if r.get("id") != self.view.rule_id]
+        db.save_log_config(interaction.guild_id, config)
         v = AutoReactView(self.view.author_id, self.view.guild)
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class RuleEditView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild, rule_id: int):
+        super().__init__(author_id, guild)
+        self.rule_id = rule_id
+        r = _autoreact_get(db.get_log_config(guild.id), rule_id)
+        if r is not None:
+            if guild.emojis:
+                self.add_item(ServerEmojiSelect(guild, r))
+            self.add_item(RuleEmojiTextButton())
+            if r.get("type") == "word":
+                self.add_item(RuleEditWordButton())
+            self.add_item(RuleDeleteButton())
+        self.add_item(AutoReactBackButton())
+
+    def build_embed(self) -> discord.Embed:
+        r = _autoreact_get(db.get_log_config(self.guild.id), self.rule_id) or {}
+        emo = " ".join(r.get("emojis", [])) or "*nessuna — scegline dal menu!*"
+        if r.get("type") == "mention":
+            quando = f"quando viene pingato <@{r.get('trigger')}>"
+        else:
+            modo = "solo la parola esatta" if r.get("mode") == "exact" else "se la parola è contenuta"
+            quando = f"parola `{r.get('trigger')}` ({modo})"
+        embed = discord.Embed(title="✏️ Modifica reaction", color=BLU,
+                              description=f"**Quando:** {quando}\n**Emoji:** {emo}")
+        embed.set_footer(text="Emoji dal menu (server) oppure 'Emoji a mano' per unicode/altre.")
+        return embed
 
 
 class AutoReactView(BaseView):
@@ -1493,7 +1683,7 @@ class AutoReactView(BaseView):
         self.add_item(AutoReactAddUserButton())
         self.add_item(AutoReactBlacklistSelect(ar.get("blacklist_channels", [])))
         if ar.get("rules"):
-            self.add_item(AutoReactRemoveSelect(guild, ar["rules"]))
+            self.add_item(AutoReactManageSelect(guild, ar["rules"]))
         self.add_item(BackButton("features"))
 
     def build_embed(self) -> discord.Embed:
@@ -1503,7 +1693,7 @@ class AutoReactView(BaseView):
         attiva = "🟢 Attiva" if feats.get("autoreact", True) else "🔴 Disattivata"
         righe = []
         for r in ar.get("rules", []):
-            emo = " ".join(r.get("emojis", []))
+            emo = " ".join(r.get("emojis", [])) or "*no emoji*"
             if r.get("type") == "mention":
                 righe.append(f"• <@{r['trigger']}> → {emo}")
             else:
@@ -1511,8 +1701,9 @@ class AutoReactView(BaseView):
                 righe.append(f"• `{r.get('trigger')}` ({modo}) → {emo}")
         embed = discord.Embed(
             title="⭐ Reaction automatiche",
-            description=("Il bot reagisce a un messaggio quando contiene una **parola** "
-                         "(esatta o contenuta) o quando un **utente** viene pingato. Max 5 emoji a regola."),
+            description=("Il bot reagisce quando un messaggio contiene una **parola** "
+                         "(esatta o contenuta) o quando un **utente** viene pingato. Max 5 emoji a regola.\n"
+                         "Seleziona una regola dal menu per **modificarla** (emoji, parola, eliminarla)."),
             color=BLU,
         )
         embed.add_field(name="Stato", value=attiva, inline=False)
@@ -1529,8 +1720,8 @@ def _feature_view(key: str, author_id: int, guild: discord.Guild):
         return ConfessionSettingsView(author_id, guild)
     if key == "partnership":
         return PartnershipSettingsView(author_id, guild)
-    if key == "daily":
-        return DailySettingsView(author_id, guild)
+    if key == "automsg":
+        return AutoMsgView(author_id, guild)
     if key == "autoreact":
         return AutoReactView(author_id, guild)
     return FeatureDetailView(author_id, guild, key)
