@@ -1,89 +1,111 @@
 # 🦊 Kitsune Bot
 
-Bot Discord multifunzione: moderazione avanzata, antispam, logging completo, sistema di log stile Quark, embed builder, benvenuti, confessioni anonime e minigiochi — tutto configurabile da una **dashboard interattiva**.
+A multi-purpose Discord bot written in **Python** (`discord.py`): moderation, anti-spam,
+full audit logging, leveling, user profiles and more — all configurable from an
+**interactive in-chat dashboard**, with no need to touch code or config files.
+
+> A real bot in daily use on a community server. Modular **cog** architecture,
+> **SQLite** persistence, fully **per-server** configuration.
 
 ---
 
-## ✨ Funzionalità principali
+## ✨ Features
 
-### 🛡️ Moderazione
-- **Ban / Softban / Hackban** (con durata, motivo, prove, purge messaggi)
-- **Kick · Timeout · Untimeout · Unban**
-- **Warn** con motivo/prove + **regole automatiche** (a N warn → timeout/kick/ban)
-- **Jail** — sistema di isolamento (ruolo + canale dedicato, auto-nascondi nuovi canali)
-- **Lock / Unlock** canali · **Slowmode** · **Clear** con filtri (utente/link/immagini/bot)
-- **Banlist · Serverinfo · Userinfo** (stile Wick)
+### 🛡️ Moderation
+- **Ban · Hackban** (ban by ID, even if the user isn't in the server) **· Unban · Kick**
+- **Timeout · Untimeout** · **Lock / Unlock** channels · **Slowmode** · **Clear** with filters (user / links / images / bots)
+- **Warn** with reason & proof + **auto-rules** (at N warns → timeout / kick / ban), plus `warnings · delwarn · clearwarns`
+- **Jail** — isolation system (dedicated role + channel, auto-hides new channels)
+- **Banlist · Serverinfo · Userinfo**
 
-### 🚨 Antispam & Sicurezza
-- 7 categorie (spam, menzioni, link, duplicati, selfbot, comandi esterni, spam grave) con **sanzioni configurabili**
-- **Anti-scam** sui link/truffe · **Whitelist** canali/ruoli/utenti
-- **DM Lock** e **Join Lock** (Pausa DM / Pausa inviti nativi di Discord)
+### 🚨 Anti-spam & Safety
+- 7 categories (spam, mentions, links, duplicates, selfbot, external commands, raid-level spam) with **configurable sanctions** (warn / timeout / kick / softban / ban)
+- **Anti-scam** link filtering · **Whitelist** for channels / roles / users
+- **DM Lock** & **Join Lock** (toggle Discord's native pause-DMs / pause-invites)
 
-### 📋 Logging (stile Quark)
-Categorie: **Members · Messages · Voice · Channels · Roles · Server · Actions · Mod Logs**
-- Canale e singoli eventi attivabili per categoria
-- Allegati (file/gif/audio), reazioni, pin, thread, webhook, eventi, permessi canale
-- Voice diviso in 3 (join/leave · mute/deaf · stream) con **durata permanenza**
-- Tracking inviti all'ingresso · pulsante **Copia ID** · **blacklist canali**
+### 📋 Logging
+Categories: **Members · Messages · Voice · Channels · Roles · Server · Actions · Mod Logs**
+- Per-category channel with individually toggleable events · channel **blacklist**
+- Attachments (files / gifs / audio), reactions, pins, threads, webhooks, channel permissions
+- Voice split into 3 streams (join/leave · mute/deaf · stream) with **session duration**
+- Invite tracking on join · **Copy ID** button
 
-### 🎭 Ruoli
-- `/role add · remove · all · humans · bots`
-- **Autorole** all'ingresso (dalla dashboard)
-- Permessi comandi moderazione configurabili per ruolo
+### 👤 User Profiles — `+profile`
+- **Privacy**: hide your avatar / banner / quotes from others (with a configurable role-based bypass)
+- **Custom reactions**: the bot reacts with your chosen emoji **when you get tagged** (mode: "tag only" or "anywhere")
+- **Self-role categories**: pick your own roles by category (e.g. region, age), single- or multi-choice
+- **Primary role** & **private voice channel** assignable by staff
+
+### 🏆 Leveling
+- `+rank` / `+r` · `+leaderboard` / `+lb`
+- `/level give · giverole · set · reset` (admin)
+
+### 🎭 Roles
+- `/role add · remove · all · humans · bots` · **Autorole** on join
 
 ### 📝 Embed Builder
-- `/embed create · edit · list · delete · send` con **preview live** e modali
-- Variabili dinamiche (`{user}`, `{user_avatar}`, `{server_membercount}`, ...)
+- `/embed create · edit · list · delete · send` with **live preview** and modals
+- Dynamic variables (`{user}`, `{user_avatar}`, `{server_membercount}`, …)
 
-### 👋 Benvenuti & Boost
-- `/set greet · /set boost` + `/test greet · /test boost` (usano un embed salvato)
+### 📨 Auto Message & ⭐ Auto React
+- Automated messages and automatic reactions to keywords or mentions — configured from the dashboard
 
-### 🤫 Confessioni anonime
-- `/confession write` + pulsante "Invia una confessione!" · log staff anti-abuso
+### 👋 Greetings & Boost · 🤫 Confessions · 🤝 Partnership
+- `/set greet · /set boost` (+ `/test greet · /test boost`) · `/confession write` with anti-abuse staff log · `/partnership`
 
-### 🎉 Fun & Minigiochi
-- `/ship` (immagine generata + Pair/matrimonio 24h) · `/marriage`
-- **Make it a Quote** (tasto destro o `?quote`)
-- `/dado · /moneta · /8ball · /rps · /indovina`
+### 🎉 Fun & Minigames
+- `+ship` (generated image + 24h marriage) · `+marriage`
+- **Make it a Quote** (right-click menu or `+quote` on a reply) · `+av · +avuser · +banner · +banneruser`
+- `+moneta · +8ball · +rps · +indovina`
 
 ### ⚙️ Dashboard
-`/dashboard` — pannello interattivo per configurare **tutto** (Log, Funzioni, Moderazione).
+`/dashboard` — interactive panel to configure **everything**: logs, features, moderation, anti-spam and profiles.
 
 ---
 
-## 📁 Struttura
+## 🧱 Tech Stack
+**Python** · **discord.py 2.x** (slash commands, context menus, UI components) · **SQLite** · **Pillow** (ship image generation)
+
+## 📁 Project Structure
 ```
 Kitsune Bot/
-├── main.py            # Avvio + sync comandi
-├── database.py        # Database SQLite condiviso
-├── logconfig.py       # Categorie log e helper
-├── requirements.txt   # Dipendenze
-├── .env               # Token (NON condividere mai!)
-└── cogs/
-    ├── moderation.py      ├── antispam.py
-    ├── logs.py            ├── dashboard.py
-    ├── roles.py           ├── embedbuilder.py
-    ├── greetings.py       ├── confession.py
-    ├── fun.py             ├── quote.py
-    └── minigames.py
+├── main.py            # Startup, cog loading, command sync
+├── database.py        # SQLite persistence (per-server config, levels, profiles…)
+├── logconfig.py       # Log categories, feature flags & helpers
+├── levelsystem.py     # XP / leveling logic
+├── requirements.txt
+└── cogs/              # moderation · antispam · logs · dashboard · roles
+                       # levels · profile · embedbuilder · greetings
+                       # confession · automessages · autoreact · partnership
+                       # fun · minigames · quote · avatar
 ```
+
+## 📸 Screenshots
+
+| Configuration Dashboard | User Profile |
+|:---:|:---:|
+| ![Dashboard](assets/screenshots/dashboard.png) | ![Profile](assets/screenshots/profile.png) |
 
 ---
 
 ## 🚀 Setup
-
-1. Installa le dipendenze:
+1. Install the dependencies:
    ```
    pip install -r requirements.txt
    ```
-2. Inserisci il token nel file `.env`:
+2. Create a `.env` file:
    ```
-   DISCORD_TOKEN=il_tuo_token_qui
-   GUILD_ID=id_server   # opzionale: sync istantanea (vuoto = globale)
+   DISCORD_TOKEN=your_token_here
+   GUILD_ID=server_id   # optional: instant slash-command sync (empty = global)
+   BOT_STATUS=your text # optional: bot custom status (empty = none)
    ```
-3. Avvia:
+3. Run it:
    ```
    python main.py
    ```
 
-> Richiede i **Privileged Intents** (Server Members + Message Content) attivi nel Developer Portal.
+> Requires the **Privileged Intents** (Server Members + Message Content) enabled in the Discord Developer Portal.
+
+---
+
+*Personal project. Code shared for demonstration / portfolio purposes.*

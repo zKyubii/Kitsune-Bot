@@ -36,14 +36,18 @@ async def on_ready():
     print(f"✅ Bot online come {bot.user}")
 
     # ── STATO DEL BOT ──────────────────────────────────────────────────────
-    # Cambia il testo e il tipo come preferisci. Tipi disponibili:
+    # Il testo dello status si imposta da .env con BOT_STATUS (vuoto = nessuno).
+    # Per altri tipi di attività al posto di CustomActivity:
     #   discord.Game(name="...")                                         → "Sta giocando a ..."
     #   discord.Activity(type=discord.ActivityType.watching, name="...") → "Guarda ..."
     #   discord.Activity(type=discord.ActivityType.listening, name="...")→ "Ascolta ..."
-    #   discord.CustomActivity(name="...")                               → testo libero
     # Status (pallino): online / idle / dnd / invisible
-    attivita = discord.CustomActivity(name=".gg/haizen")
-    await bot.change_presence(status=discord.Status.online, activity=attivita)
+    status_text = os.getenv("BOT_STATUS", "").strip()
+    if status_text:
+        await bot.change_presence(
+            status=discord.Status.online,
+            activity=discord.CustomActivity(name=status_text),
+        )
 
     try:
         guild_ids = [g.strip() for g in os.getenv("GUILD_ID", "").split(",") if g.strip()]
