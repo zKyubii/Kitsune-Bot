@@ -129,6 +129,20 @@ class Logs(commands.Cog):
             pass
         return None, None
 
+    def _command_moderator(self, guild, label, target_id):
+        """Se l'azione l'ha eseguita il bot tramite un comando, restituisce il
+        moderatore reale che l'ha lanciata (registrato dal cog Moderation)."""
+        store = getattr(self.bot, "recent_mod", None)
+        if not store:
+            return None
+        info = store.pop((guild.id, label, target_id), None)
+        if not info:
+            return None
+        mod_id, ts = info
+        if (now() - ts).total_seconds() > 30:
+            return None
+        return guild.get_member(mod_id)
+
     async def _changed_by(self, guild, action, target_id):
         """Restituisce 'mention' di chi ha fatto l'azione, o 'themselves' se è stato l'utente stesso."""
         actor, _ = await self._actor(guild, action, target_id)
@@ -193,6 +207,7 @@ class Logs(commands.Cog):
             return
 
         actor, reason = await self._actor(guild, discord.AuditLogAction.kick, member.id)
+        actor = self._command_moderator(guild, "kick", member.id) or actor
         if actor:
             rest = [f"**Moderator:** {actor.mention}"]
             if reason:
@@ -208,6 +223,7 @@ class Logs(commands.Cog):
     @commands.Cog.listener()
     async def on_member_ban(self, guild, user):
         actor, reason = await self._actor(guild, discord.AuditLogAction.ban, user.id)
+        actor = self._command_moderator(guild, "ban", user.id) or actor
         rest = []
         if actor:
             rest.append(f"**Moderator:** {actor.mention}")
@@ -219,6 +235,7 @@ class Logs(commands.Cog):
     @commands.Cog.listener()
     async def on_member_unban(self, guild, user):
         actor, _ = await self._actor(guild, discord.AuditLogAction.unban, user.id)
+        actor = self._command_moderator(guild, "unban", user.id) or actor
         rest = [f"**Moderator:** {actor.mention}"] if actor else []
         e = _emb(GREEN, "✅ Member Unbanned", f"{user} (`{user.id}`)", rest, user=user)
         await self._send(guild, "modlogs", "ban", e, copy_id=user.id)
@@ -260,11 +277,14 @@ class Logs(commands.Cog):
         a_to = getattr(after, "timed_out_until", None)
         if b_to != a_to:
             if a_to:
-                by = await self._changed_by(guild, discord.AuditLogAction.member_update, after.id)
+                mod = self._command_moderator(guild, "timeout", after.id)
+                by = mod.mention if mod else await self._changed_by(
+                    guild, discord.AuditLogAction.member_update, after.id)
                 e = _emb(GOLD, "⏱️ Timeout Applied", after.mention,
                          [f"**Expires:** {discord.utils.format_dt(a_to, 'R')}", f"**By:** {by}"], user=after)
             else:
                 actor, _ = await self._actor(guild, discord.AuditLogAction.member_update, after.id)
+                actor = self._command_moderator(guild, "timeout", after.id) or actor
                 if actor and actor.id != after.id:
                     rest = [f"**Removed by:** {actor.mention}"]
                 else:

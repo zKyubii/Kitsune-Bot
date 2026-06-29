@@ -122,15 +122,24 @@ def mention_rule_for(config: dict, user_id: int):
     return None
 
 
-def ensure_mention_rule(config: dict, user_id: int) -> dict:
-    """Restituisce la regola mention dell'utente, creandola vuota se non esiste."""
+def ensure_mention_rule(config: dict, user_id: int, source: str = None) -> dict:
+    """Restituisce la regola mention dell'utente, creandola vuota se non esiste.
+
+    `source="profile"` marca la regola come creata dal sistema profilo (custom
+    reactions): serve per distinguerla dalle mention create a mano dall'admin
+    nell'Autoreact, così possiamo rimuoverla quando l'utente perde il ruolo.
+    """
     rules = config.setdefault("autoreact", {}).setdefault("rules", [])
     existing = mention_rule_for(config, user_id)
     if existing is not None:
+        if source:
+            existing["source"] = source
         return existing
     new_id = max((r.get("id", 0) for r in rules if isinstance(r.get("id"), int)), default=0) + 1
     rule = {"id": new_id, "type": "mention", "trigger": str(user_id),
             "mode": "contains", "emojis": []}
+    if source:
+        rule["source"] = source
     rules.append(rule)
     return rule
 
@@ -141,6 +150,17 @@ def remove_mention_rule(config: dict, user_id: int):
         r for r in rules
         if not (r.get("type") == "mention" and str(r.get("trigger")) == str(user_id))
     ]
+
+
+def remove_profile_mention_rule(config: dict, user_id: int) -> bool:
+    """Rimuove la mention-rule dell'utente SOLO se è una custom reaction del
+    profilo (source='profile'). Lascia intatte le mention create dall'admin.
+    Ritorna True se ha rimosso qualcosa."""
+    r = mention_rule_for(config, user_id)
+    if r is not None and r.get("source") == "profile":
+        remove_mention_rule(config, user_id)
+        return True
+    return False
 
 
 # ── ANTISPAM ──────────────────────────────────────────────────────────────────

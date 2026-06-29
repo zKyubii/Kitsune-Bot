@@ -9,7 +9,7 @@ import database as db
 
 
 def parse_duration(duration_str: str) -> datetime.timedelta | None:
-    match = re.fullmatch(r'(\d+)([smh])', duration_str.strip().lower())
+    match = re.fullmatch(r'(\d+)([smhd])', duration_str.strip().lower())
     if not match:
         return None
     value, unit = int(match.group(1)), match.group(2)
@@ -19,6 +19,8 @@ def parse_duration(duration_str: str) -> datetime.timedelta | None:
         return datetime.timedelta(minutes=value)
     elif unit == 'h':
         return datetime.timedelta(hours=value)
+    elif unit == 'd':
+        return datetime.timedelta(days=value)
 
 
 def format_seconds(s: int) -> str:
@@ -151,6 +153,16 @@ class Moderation(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.temp_bans: dict = {}
+        # Registro condiviso col cog Logs: quando un'azione la esegue il bot
+        # tramite comando, qui salviamo chi l'ha lanciata, così il mod-log
+        # mostra il moderatore reale invece del bot.
+        if not hasattr(bot, "recent_mod"):
+            bot.recent_mod = {}
+
+    def _remember_mod(self, guild_id: int, label: str, target_id: int, moderatore: discord.abc.User):
+        self.bot.recent_mod[(guild_id, label, target_id)] = (
+            moderatore.id, datetime.datetime.now(datetime.timezone.utc)
+        )
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, ModRoleMissing):
@@ -195,17 +207,19 @@ class Moderation(commands.Cog):
             delta = parse_duration(durata)
             if not delta:
                 await interaction.followup.send(
-                    "❌ Formato durata non valido. Usa es: `10m`, `2h`, `30s`", ephemeral=True
+                    "❌ Formato durata non valido. Usa es: `30s`, `10m`, `2h`, `7d`", ephemeral=True
                 )
                 return
 
         await membro.ban(reason=motivo, delete_message_days=purge_days)
+        self._remember_mod(interaction.guild_id, "ban", membro.id, interaction.user)
 
         extra = {}
         if purge_days > 0:
             extra["🧹 **Purged:**"] = f"ultimi {purge_days} giorni"
 
         if soft_ban:
+            self._remember_mod(interaction.guild_id, "unban", membro.id, interaction.user)
             await interaction.guild.unban(membro, reason="Soft ban — pulizia messaggi")
             embed = build_mod_embed(
                 "Soft Ban", "Soft Banned", membro, interaction.user, COLORI["softban"],
@@ -249,6 +263,7 @@ class Moderation(commands.Cog):
         try:
             user = await self.bot.fetch_user(int(utente_id))
             await interaction.guild.ban(user, reason=motivo)
+            self._remember_mod(interaction.guild_id, "ban", user.id, interaction.user)
 
             embed = build_mod_embed(
                 "Hack Ban", "Banned", user, interaction.user, COLORI["hackban"],
@@ -277,6 +292,7 @@ class Moderation(commands.Cog):
         try:
             user = await self.bot.fetch_user(int(utente_id))
             await interaction.guild.unban(user, reason=motivo)
+            self._remember_mod(interaction.guild_id, "unban", user.id, interaction.user)
 
             embed = build_mod_embed(
                 "Unban", "Unbanned", user, interaction.user, COLORI["unban"],
@@ -305,6 +321,7 @@ class Moderation(commands.Cog):
             return
 
         await interaction.response.defer()
+        self._remember_mod(interaction.guild_id, "kick", membro.id, interaction.user)
         await membro.kick(reason=motivo)
 
         embed = build_mod_embed(
@@ -333,11 +350,18 @@ class Moderation(commands.Cog):
         delta = parse_duration(durata)
         if not delta:
             await interaction.response.send_message(
-                "❌ Formato durata non valido. Usa es: `10m`, `2h`, `30s`", ephemeral=True
+                "❌ Formato durata non valido. Usa es: `30s`, `10m`, `2h`, `7d`", ephemeral=True
+            )
+            return
+
+        if delta > datetime.timedelta(days=28):
+            await interaction.response.send_message(
+                "❌ Il timeout massimo consentito da Discord è **28 giorni** (`28d`).", ephemeral=True
             )
             return
 
         await interaction.response.defer()
+        self._remember_mod(interaction.guild_id, "timeout", membro.id, interaction.user)
         await membro.timeout(delta, reason=motivo)
 
         embed = build_mod_embed(
@@ -351,6 +375,7 @@ class Moderation(commands.Cog):
     @app_commands.default_permissions(moderate_members=True)
     @app_commands.checks.has_permissions(moderate_members=True)
     async def untimeout(self, interaction: discord.Interaction, membro: discord.Member):
+        self._remember_mod(interaction.guild_id, "timeout", membro.id, interaction.user)
         await membro.timeout(None)
         embed = build_mod_embed(
             "Untimeout", "Timeout removed", membro, interaction.user, COLORI["untimeout"],

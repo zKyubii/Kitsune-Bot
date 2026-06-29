@@ -297,7 +297,7 @@ class ReactServerEmojiSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         v = self.view
         config = db.get_log_config(v.guild.id)
-        r = logconfig.ensure_mention_rule(config, v.member.id)
+        r = logconfig.ensure_mention_rule(config, v.member.id, source="profile")
         # conserva le emoji scelte in altre pagine / a mano, aggiorna solo questa pagina
         altri = [e for e in r.get("emojis", []) if e not in self._page_strs]
         r["emojis"] = (altri + list(self.values))[:self.maxn]
@@ -335,7 +335,7 @@ class ReactManualModal(discord.ui.Modal, title="Emoji a mano"):
 
     async def on_submit(self, interaction: discord.Interaction):
         config = db.get_log_config(self.guild.id)
-        r = logconfig.ensure_mention_rule(config, self.member.id)
+        r = logconfig.ensure_mention_rule(config, self.member.id, source="profile")
         r["emojis"] = parse_emojis(self.box.value, self.guild, self.maxn)
         db.save_log_config(self.guild.id, config)
         nv = ReactView(self.author_id, self.guild, self.member)
@@ -362,7 +362,7 @@ class ReactModeButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         v = self.view
         config = db.get_log_config(v.guild.id)
-        r = logconfig.ensure_mention_rule(config, v.member.id)
+        r = logconfig.ensure_mention_rule(config, v.member.id, source="profile")
         r["mode"] = "contains" if r.get("mode") == "exact" else "exact"
         db.save_log_config(v.guild.id, config)
         nv = ReactView(v.author_id, v.guild, v.member, v.emoji_page)
@@ -558,6 +558,18 @@ class RolesView(_ProfileBase):
 class Profile(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+        # Se l'utente perde il ruolo che abilita le custom reactions, togliamo
+        # anche la sua reaction-al-tag (oltre alla possibilità di impostarla).
+        if before.roles == after.roles:
+            return
+        config = db.get_log_config(after.guild.id)
+        if logconfig.custom_react_allowed(config, before) and \
+                not logconfig.custom_react_allowed(config, after):
+            if logconfig.remove_profile_mention_rule(config, after.id):
+                db.save_log_config(after.guild.id, config)
 
     @commands.command(name="profile", aliases=["profilo"])
     @commands.guild_only()

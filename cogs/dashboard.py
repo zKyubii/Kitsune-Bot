@@ -5,7 +5,8 @@ import datetime
 
 import database as db
 import levelsystem as ls
-from logconfig import LOG_CATEGORIES, FEATURES, SPAM_CATEGORIES, SANCTIONS, categoria_cfg, ensure_mention_rule
+from logconfig import (LOG_CATEGORIES, FEATURES, SPAM_CATEGORIES, SANCTIONS, categoria_cfg,
+                       ensure_mention_rule, custom_react_allowed, remove_profile_mention_rule)
 
 BLU = 0x5865F2
 
@@ -1565,9 +1566,11 @@ class AutoReactBlacklistSelect(discord.ui.ChannelSelect):
 
 
 class AutoReactManageSelect(discord.ui.Select):
-    def __init__(self, guild, rules):
+    def __init__(self, guild, rules, page=0):
+        chunk = rules[page * 25:page * 25 + 25]
+        tot = max(1, (len(rules) + 24) // 25)
         options = []
-        for r in rules[:25]:
+        for r in chunk:
             emo = " ".join(r.get("emojis", []))[:20] or "no emoji"
             if r.get("type") == "mention":
                 member = guild.get_member(int(r["trigger"])) if str(r.get("trigger", "")).isdigit() else None
@@ -1576,11 +1579,27 @@ class AutoReactManageSelect(discord.ui.Select):
                 modo = "esatta" if r.get("mode") == "exact" else "contiene"
                 lab = f"'{r.get('trigger')}' ({modo}) → {emo}"
             options.append(discord.SelectOption(label=lab[:100], value=str(r.get("id"))))
-        super().__init__(placeholder="✏️ Modifica una reaction...", options=options, row=2)
+        ph = (f"✏️ Modifica una reaction — pag {page + 1}/{tot}"
+              if tot > 1 else "✏️ Modifica una reaction...")
+        super().__init__(placeholder=ph, options=options or [discord.SelectOption(label="—")], row=2)
 
     async def callback(self, interaction: discord.Interaction):
         v = RuleEditView(self.view.author_id, self.view.guild, int(self.values[0]))
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class AutoReactPageButton(discord.ui.Button):
+    def __init__(self, delta, label):
+        super().__init__(label=label, style=discord.ButtonStyle.secondary, row=3)
+        self.delta = delta
+
+    async def callback(self, interaction: discord.Interaction):
+        v = self.view
+        rules = db.get_log_config(v.guild.id).get("autoreact", {}).get("rules", [])
+        tot = max(1, (len(rules) + 24) // 25)
+        new_page = max(0, min(tot - 1, v.manage_page + self.delta))
+        nv = AutoReactView(v.author_id, v.guild, new_page)
+        await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
 
 
 # — modifica di una singola regola —
@@ -1752,18 +1771,23 @@ class RuleEditView(BaseView):
 
 
 class AutoReactView(BaseView):
-    def __init__(self, author_id: int, guild: discord.Guild):
+    def __init__(self, author_id: int, guild: discord.Guild, manage_page: int = 0):
         super().__init__(author_id, guild)
+        self.manage_page = manage_page
         _autoreact_ensure_ids(guild.id)
         config = db.get_log_config(guild.id)
         feats = config.get("features", {})
         ar = config.get("autoreact", {})
+        rules = ar.get("rules", [])
         self.add_item(FeatureToggleButton("autoreact", feats.get("autoreact", True)))
         self.add_item(AutoReactAddWordButton())
         self.add_item(AutoReactAddUserButton())
         self.add_item(AutoReactBlacklistSelect(ar.get("blacklist_channels", [])))
-        if ar.get("rules"):
-            self.add_item(AutoReactManageSelect(guild, ar["rules"]))
+        if rules:
+            self.add_item(AutoReactManageSelect(guild, rules, manage_page))
+            if len(rules) > 25:
+                self.add_item(AutoReactPageButton(-1, "◀ Pagina"))
+                self.add_item(AutoReactPageButton(1, "Pagina ▶"))
         self.add_item(BackButton("features"))
 
     def build_embed(self) -> discord.Embed:
@@ -2062,6 +2086,15 @@ class CustomReactRolesSelect(discord.ui.RoleSelect):
         config, prof = _profile_cfg(interaction.guild_id)
         cr = prof.setdefault("custom_react", {})
         cr["allowed_roles"] = [r.id for r in self.values]
+        # Pulizia: chi non è più abilitato perde la sua custom reaction al tag.
+        guild = interaction.guild
+        for rule in list(config.get("autoreact", {}).get("rules", [])):
+            if rule.get("type") != "mention" or rule.get("source") != "profile":
+                continue
+            uid = rule.get("trigger")
+            member = guild.get_member(int(uid)) if str(uid).isdigit() else None
+            if member is None or not custom_react_allowed(config, member):
+                remove_profile_mention_rule(config, int(uid))
         db.save_log_config(interaction.guild_id, config)
         v = CustomReactView(self.view.author_id, self.view.guild)
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
@@ -2088,7 +2121,7 @@ class CustomReactUserPick(discord.ui.UserSelect):
 
     async def callback(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
-        r = ensure_mention_rule(config, self.values[0].id)
+        r = ensure_mention_rule(config, self.values[0].id, source="profile")
         db.save_log_config(interaction.guild_id, config)
         v = RuleEditView(self.view.author_id, self.view.guild, r["id"])
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
