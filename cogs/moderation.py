@@ -1,8 +1,7 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 import datetime
-import asyncio
 import re
 
 import database as db
@@ -152,12 +151,40 @@ def gerarchia_ok(interaction: discord.Interaction, membro: discord.Member) -> tu
 class Moderation(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.temp_bans: dict = {}
         # Registro condiviso col cog Logs: quando un'azione la esegue il bot
         # tramite comando, qui salviamo chi l'ha lanciata, così il mod-log
         # mostra il moderatore reale invece del bot.
         if not hasattr(bot, "recent_mod"):
             bot.recent_mod = {}
+        self.check_temp_bans.start()
+
+    def cog_unload(self):
+        self.check_temp_bans.cancel()
+
+    # ── BAN TEMPORANEI ────────────────────────────────────────────────────────
+    @tasks.loop(minutes=1)
+    async def check_temp_bans(self):
+        """Sblocca i ban temporanei scaduti.
+
+        La scadenza è nel DB, quindi funziona anche se il bot è stato riavviato
+        (o è rimasto offline) mentre il ban era in corso.
+        """
+        for row in db.get_expired_temp_bans():
+            guild = self.bot.get_guild(row["guild_id"])
+            if guild is None:
+                continue  # bot non più in quel server: riproviamo più avanti
+            try:
+                user = await self.bot.fetch_user(row["user_id"])
+                await guild.unban(user, reason=f"Ban temporaneo scaduto ({row['reason'] or ''})".strip())
+            except discord.NotFound:
+                pass  # già sbannato a mano: ripuliamo comunque il record
+            except discord.HTTPException:
+                continue  # errore temporaneo: riproviamo al prossimo giro
+            db.remove_temp_ban(row["guild_id"], row["user_id"])
+
+    @check_temp_bans.before_loop
+    async def before_check_temp_bans(self):
+        await self.bot.wait_until_ready()
 
     def _remember_mod(self, guild_id: int, label: str, target_id: int, moderatore: discord.abc.User):
         self.bot.recent_mod[(guild_id, label, target_id)] = (
@@ -234,19 +261,8 @@ class Moderation(commands.Cog):
         await interaction.followup.send(embed=embed)
 
         if delta and not soft_ban:
-            async def scheduled_unban():
-                await asyncio.sleep(delta.total_seconds())
-                try:
-                    user = await self.bot.fetch_user(membro.id)
-                    await interaction.guild.unban(user, reason=f"Temp ban scaduto ({durata})")
-                except Exception:
-                    pass
-
-            gid, uid = interaction.guild_id, membro.id
-            self.temp_bans.setdefault(gid, {})
-            if uid in self.temp_bans[gid]:
-                self.temp_bans[gid][uid].cancel()
-            self.temp_bans[gid][uid] = asyncio.create_task(scheduled_unban())
+            scadenza = datetime.datetime.now(datetime.timezone.utc) + delta
+            db.add_temp_ban(interaction.guild_id, membro.id, scadenza, durata)
 
     # ── HACK BAN ──────────────────────────────────────────────────────────────
     @app_commands.command(name="hackban", description="Banna un utente tramite ID (anche se non è nel server)")
@@ -293,6 +309,7 @@ class Moderation(commands.Cog):
             user = await self.bot.fetch_user(int(utente_id))
             await interaction.guild.unban(user, reason=motivo)
             self._remember_mod(interaction.guild_id, "unban", user.id, interaction.user)
+            db.remove_temp_ban(interaction.guild_id, user.id)
 
             embed = build_mod_embed(
                 "Unban", "Unbanned", user, interaction.user, COLORI["unban"],

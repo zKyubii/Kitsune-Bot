@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 import discord
@@ -18,7 +19,9 @@ _BOOST_MSG_TYPES = (
 class Greetings(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self._boost_recent = {}  # user_id -> ultimo timestamp avviso boost (anti-doppione)
+        # user_id -> timestamp dell'ultimo boost annunciato dal messaggio di sistema.
+        # Serve solo perché il fallback on_member_update non duplichi lo stesso boost.
+        self._boost_da_messaggio = {}
 
     set_group = app_commands.Group(
         name="set", description="Configura i messaggi automatici",
@@ -107,29 +110,38 @@ class Greetings(commands.Cog):
     async def on_member_join(self, member: discord.Member):
         await self._invia(member.guild, "greet", member)
 
-    async def _trigger_boost(self, guild, member):
-        """Invia l'alert boost una sola volta (i due trigger qui sotto potrebbero
-        scattare entrambi per lo stesso boost)."""
-        if member is None or member.bot:
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        """Trigger principale dei boost.
+
+        Discord manda UN messaggio di sistema per OGNI boost, quindi due boost
+        ravvicinati (o due boost dello stesso utente) producono due embed.
+        """
+        if not message.guild or message.type not in _BOOST_MSG_TYPES:
             return
-        now = time.time()
-        if now - self._boost_recent.get(member.id, 0) < 30:
+        autore = message.author
+        if autore is None or autore.bot:
             return
-        self._boost_recent[member.id] = now
-        await self._invia(guild, "boost", member)
+        self._boost_da_messaggio[autore.id] = time.time()
+        await self._invia(message.guild, "boost", autore)
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
-        # Boost: premium_since passa da None a una data
-        if before.premium_since is None and after.premium_since is not None:
-            await self._trigger_boost(after.guild, after)
+        """Fallback: scatta solo se il messaggio di sistema non è arrivato.
 
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        # Trigger affidabile: il messaggio di sistema che Discord manda a ogni boost
-        # (funziona anche se il membro non è in cache, dove on_member_update fallisce).
-        if message.guild and message.type in _BOOST_MSG_TYPES:
-            await self._trigger_boost(message.guild, message.author)
+        Serve ai server che hanno disattivato i messaggi di boost nel canale di
+        sistema (lì on_message non scatta mai). Nota: `premium_since` passa da
+        None a una data solo al PRIMO boost, quindi questo non può gestire i
+        boost successivi — per quelli l'unica fonte affidabile è on_message.
+        """
+        if before.premium_since is not None or after.premium_since is None or after.bot:
+            return
+        # Diamo tempo al messaggio di sistema di arrivare, poi controlliamo
+        # se ha già annunciato lui questo boost.
+        await asyncio.sleep(3)
+        if time.time() - self._boost_da_messaggio.get(after.id, 0) < 10:
+            return
+        await self._invia(after.guild, "boost", after)
 
 
 async def setup(bot):

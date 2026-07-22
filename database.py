@@ -89,6 +89,14 @@ def init_db():
             user_id  INTEGER PRIMARY KEY,
             data     TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS temp_bans (
+            guild_id  INTEGER,
+            user_id   INTEGER,
+            unban_at  TEXT,
+            reason    TEXT,
+            PRIMARY KEY (guild_id, user_id)
+        );
     """)
     conn.commit()
 
@@ -386,3 +394,34 @@ def save_user_profile(user_id: int, data: dict):
         (user_id, json.dumps(data)),
     )
     conn.commit()
+
+
+# ── BAN TEMPORANEI ──────────────────────────────────────────────────────────
+# La scadenza sta nel DB (non in un task in memoria) così i ban temporanei
+# vengono sbloccati anche se il bot viene riavviato nel frattempo.
+def add_temp_ban(guild_id: int, user_id: int, scadenza: datetime.datetime, durata: str = None):
+    conn.execute(
+        """
+        INSERT INTO temp_bans (guild_id, user_id, unban_at, reason) VALUES (?, ?, ?, ?)
+        ON CONFLICT(guild_id, user_id) DO UPDATE SET
+            unban_at = excluded.unban_at,
+            reason   = excluded.reason
+        """,
+        (guild_id, user_id, scadenza.isoformat(), durata),
+    )
+    conn.commit()
+
+
+def remove_temp_ban(guild_id: int, user_id: int):
+    conn.execute(
+        "DELETE FROM temp_bans WHERE guild_id = ? AND user_id = ?", (guild_id, user_id)
+    )
+    conn.commit()
+
+
+def get_expired_temp_bans() -> list:
+    """Ban temporanei la cui scadenza è già passata."""
+    adesso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return conn.execute(
+        "SELECT * FROM temp_bans WHERE unban_at <= ?", (adesso,)
+    ).fetchall()
