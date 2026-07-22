@@ -6,6 +6,7 @@ from discord.ext import commands
 
 import database as db
 import logconfig
+from locales import t
 
 # Solo numeri interi positivi: qualsiasi altro messaggio viene ignorato,
 # non conta come errore (così chi scrive due parole non rompe la catena).
@@ -124,12 +125,16 @@ class Counting(commands.Cog):
         except discord.HTTPException:
             pass
 
-        motivo = ("non puoi contare due volte di fila"
-                  if stesso_utente else f"il numero giusto era **{atteso}**")
+        motivo = (t(config, "counting.reason_double") if stesso_utente
+                  else t(config, "counting.reason_wrong", expected=atteso))
+        # Se il record è stato appena stabilito da questa catena, festeggiamolo
+        # invece di ripetere lo stesso numero due volte.
+        riga_record = (t(config, "counting.record_new", record=record) if raggiunto >= record
+                       else t(config, "counting.record_current", record=record))
         try:
             await message.channel.send(
-                f"❌ {message.author.mention} ha rotto la catena: {motivo}.\n"
-                f"Si riparte da **1** — eravate arrivati a **{raggiunto}** · record **{record}**"
+                t(config, "counting.ruined", user=message.author.mention,
+                  n=raggiunto, reason=motivo, record=riga_record)
             )
         except discord.HTTPException:
             pass
@@ -160,8 +165,7 @@ class Counting(commands.Cog):
         autore = f"<@{uid}>" if uid else "Qualcuno"
         try:
             await canale.send(
-                f"⚠️ {autore} ha cancellato il suo numero: ```{numero}```"
-                f"Il prossimo numero è **{numero + 1}**.",
+                t(config, "counting.deleted", user=autore, n=numero, next=numero + 1),
                 allowed_mentions=discord.AllowedMentions.none(),
             )
         except discord.HTTPException:

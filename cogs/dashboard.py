@@ -7,6 +7,7 @@ import database as db
 import levelsystem as ls
 from logconfig import (LOG_CATEGORIES, FEATURES, SPAM_CATEGORIES, SANCTIONS, categoria_cfg,
                        ensure_mention_rule, custom_react_allowed, remove_profile_mention_rule)
+from locales import t, lang_of, LANG_NAMES
 
 BLU = 0x5865F2
 
@@ -283,10 +284,29 @@ class BaseView(discord.ui.View):
         return True
 
 
+class LanguageSelect(discord.ui.Select):
+    """Lingua del bot su questo server (i testi cambiano solo qui)."""
+
+    def __init__(self, config):
+        attuale = lang_of(config)
+        options = [discord.SelectOption(label=nome, value=code, default=(code == attuale))
+                   for code, nome in LANG_NAMES.items()]
+        super().__init__(placeholder=t(config, "lang.placeholder"), options=options, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config["lang"] = self.values[0]
+        db.save_log_config(interaction.guild_id, config)
+        v = DashboardView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(
+            embed=build_main_embed(self.view.guild, config), view=v)
+
+
 class DashboardView(BaseView):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(author_id, guild)
         self.add_item(HomeSelect())
+        self.add_item(LanguageSelect(db.get_log_config(guild.id)))
 
 
 class OpenLogBlacklistButton(discord.ui.Button):
@@ -1828,8 +1848,8 @@ def _counting_cfg(guild_id: int):
 
 
 class CountingChannelSelect(discord.ui.ChannelSelect):
-    def __init__(self, current):
-        super().__init__(placeholder="🔢 Canale del counting...",
+    def __init__(self, current, config):
+        super().__init__(placeholder=t(config, "counting.channel_placeholder"),
                          channel_types=[discord.ChannelType.text],
                          min_values=0, max_values=1, row=1,
                          default_values=_dv([current] if current else [],
@@ -1844,8 +1864,8 @@ class CountingChannelSelect(discord.ui.ChannelSelect):
 
 
 class CountingResetToggle(discord.ui.Button):
-    def __init__(self, attivo):
-        super().__init__(label="Se sbagliano: riparte da 1" if attivo else "Se sbagliano: cancella e basta",
+    def __init__(self, attivo, config):
+        super().__init__(label=t(config, "counting.btn_reset_on" if attivo else "counting.btn_reset_off"),
                          emoji="🔁" if attivo else "🗑️",
                          style=discord.ButtonStyle.secondary, row=2)
 
@@ -1858,8 +1878,8 @@ class CountingResetToggle(discord.ui.Button):
 
 
 class CountingReactToggle(discord.ui.Button):
-    def __init__(self, attivo):
-        super().__init__(label="Reazione ✅ attiva" if attivo else "Reazione ✅ spenta",
+    def __init__(self, attivo, config):
+        super().__init__(label=t(config, "counting.btn_react_on" if attivo else "counting.btn_react_off"),
                          style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
@@ -1870,15 +1890,16 @@ class CountingReactToggle(discord.ui.Button):
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
-class CountingMilestonesModal(discord.ui.Modal, title="Traguardi"):
+class CountingMilestonesModal(discord.ui.Modal):
     def __init__(self, author_id, guild):
-        super().__init__()
+        config = db.get_log_config(guild.id)
+        super().__init__(title=t(config, "counting.modal_title"))
         self.author_id = author_id
         self.guild = guild
-        cnt = db.get_log_config(guild.id).get("counting", {})
+        cnt = config.get("counting", {})
         attuali = ", ".join(f"{n}: {e}" for n, e in counting_milestones(cnt).items())
         self.box = discord.ui.TextInput(
-            label="Numero: emoji (separati da virgola)", required=False,
+            label=t(config, "counting.modal_label"), required=False,
             default=attuali, placeholder="100: 💯, 1000: 🔥",
             max_length=200)
         self.add_item(self.box)
@@ -1892,8 +1913,8 @@ class CountingMilestonesModal(discord.ui.Modal, title="Traguardi"):
 
 
 class CountingMilestonesButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Traguardi", emoji="🏁",
+    def __init__(self, config):
+        super().__init__(label=t(config, "counting.btn_milestones"), emoji="🏁",
                          style=discord.ButtonStyle.secondary, row=3)
 
     async def callback(self, interaction: discord.Interaction):
@@ -1902,8 +1923,8 @@ class CountingMilestonesButton(discord.ui.Button):
 
 
 class CountingResetCountButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Azzera conteggio", emoji="🔄",
+    def __init__(self, config):
+        super().__init__(label=t(config, "counting.btn_clear"), emoji="🔄",
                          style=discord.ButtonStyle.danger, row=2)
 
     async def callback(self, interaction: discord.Interaction):
@@ -1923,38 +1944,41 @@ class CountingView(BaseView):
         feats = config.get("features", {})
         cnt = config.get("counting", {})
         self.add_item(FeatureToggleButton("counting", feats.get("counting", True)))
-        self.add_item(CountingChannelSelect(cnt.get("channel")))
-        self.add_item(CountingResetToggle(cnt.get("reset_on_fail", True)))
-        self.add_item(CountingReactToggle(cnt.get("react_ok", True)))
-        self.add_item(CountingResetCountButton())
-        self.add_item(CountingMilestonesButton())
+        self.add_item(CountingChannelSelect(cnt.get("channel"), config))
+        self.add_item(CountingResetToggle(cnt.get("reset_on_fail", True), config))
+        self.add_item(CountingReactToggle(cnt.get("react_ok", True), config))
+        self.add_item(CountingResetCountButton(config))
+        self.add_item(CountingMilestonesButton(config))
         self.add_item(BackButton("features"))
 
     def build_embed(self) -> discord.Embed:
         config = db.get_log_config(self.guild.id)
         cnt = config.get("counting", {})
-        attiva = "🟢 Attiva" if config.get("features", {}).get("counting", True) else "🔴 Disattivata"
+        attivo = config.get("features", {}).get("counting", True)
         ch = self.guild.get_channel(cnt.get("channel")) if cnt.get("channel") else None
-        modo = ("il conteggio riparte da 1" if cnt.get("reset_on_fail", True)
-                else "il messaggio sbagliato viene cancellato")
-        embed = discord.Embed(
-            title="🔢 Counting",
-            description="Si conta a turno nel canale scelto: **non si può contare due volte di fila**.\n"
-                        "I messaggi che non sono numeri vengono ignorati.",
-            color=BLU,
-        )
-        embed.add_field(name="Stato", value=attiva, inline=False)
-        embed.add_field(name="📢 Canale", value=ch.mention if ch else "❌ non impostato", inline=False)
-        embed.add_field(name="Numero attuale", value=f"**{cnt.get('current', 0)}** "
-                                                     f"(prossimo: {cnt.get('current', 0) + 1})", inline=True)
-        embed.add_field(name="🏆 Record", value=str(cnt.get("record", 0)), inline=True)
-        embed.add_field(name="Se sbagliano", value=modo, inline=False)
-        embed.add_field(name="Reazione ✅", value="attiva" if cnt.get("react_ok", True) else "spenta", inline=False)
+        modo = t(config, "counting.on_fail_reset" if cnt.get("reset_on_fail", True)
+                 else "counting.on_fail_delete")
+        attuale = cnt.get("current", 0)
+        embed = discord.Embed(title=t(config, "counting.title"),
+                              description=t(config, "counting.desc"), color=BLU)
+        embed.add_field(name=t(config, "common.state"),
+                        value=t(config, "common.enabled" if attivo else "common.disabled"), inline=False)
+        embed.add_field(name=t(config, "common.channel"),
+                        value=ch.mention if ch else t(config, "common.not_set"), inline=False)
+        embed.add_field(name=t(config, "counting.current"),
+                        value=t(config, "counting.current_value", n=attuale, next=attuale + 1), inline=True)
+        embed.add_field(name=t(config, "counting.record"), value=str(cnt.get("record", 0)), inline=True)
+        embed.add_field(name=t(config, "counting.on_fail"), value=modo, inline=False)
+        embed.add_field(name=t(config, "counting.react_field"),
+                        value=t(config, "counting.react_on" if cnt.get("react_ok", True)
+                                else "counting.react_off"), inline=False)
         ms = counting_milestones(cnt)
-        embed.add_field(name="🏁 Traguardi",
-                        value=" · ".join(f"{e} a {n}" for n, e in ms.items()) if ms else "nessuno",
-                        inline=False)
-        embed.set_footer(text="Se qualcuno cancella il suo numero, il bot avvisa qual è il prossimo.")
+        embed.add_field(
+            name=t(config, "counting.milestones"),
+            value=" · ".join(t(config, "counting.milestone_entry", emoji=e, n=n)
+                             for n, e in ms.items()) if ms else t(config, "counting.milestones_none"),
+            inline=False)
+        embed.set_footer(text=t(config, "counting.footer"))
         return embed
 
 
