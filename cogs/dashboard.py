@@ -14,12 +14,12 @@ BLU = 0x5865F2
 
 def build_main_embed(guild: discord.Guild, config: dict) -> discord.Embed:
     embed = discord.Embed(
-        title="⚙️ Dashboard di configurazione",
-        description="Seleziona una sezione dal menu qui sotto per configurarla.",
+        title=_T("dash.dashboard_configurazione"),
+        description=_T("dash.seleziona_sezione_dal_menu"),
         color=BLU,
     )
     embed.add_field(
-        name="Sezioni disponibili",
+        name=_T("dash.sezioni_disponibili"),
         value=(
             "📋 **Log** — canali ed eventi di log\n"
             "🔧 **Funzioni** — attiva/disattiva le funzioni del bot\n"
@@ -28,14 +28,14 @@ def build_main_embed(guild: discord.Guild, config: dict) -> discord.Embed:
         ),
         inline=False,
     )
-    embed.set_footer(text="Le modifiche vengono salvate automaticamente")
+    embed.set_footer(text=_T("dash.modifiche_vengono_salvate_automaticamente"))
     return embed
 
 
 # ── COMPONENTI ────────────────────────────────────────────────────────────────
 class BackButton(discord.ui.Button):
     def __init__(self, destination: str = "home"):
-        super().__init__(label="Indietro", emoji="⬅️", style=discord.ButtonStyle.secondary, row=4)
+        super().__init__(label=_T("dash.indietro"), emoji="⬅️", style=discord.ButtonStyle.secondary, row=4)
         self.destination = destination
 
     async def callback(self, interaction: discord.Interaction):
@@ -72,16 +72,16 @@ class BackButton(discord.ui.Button):
 class HomeSelect(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="📋 Log", value="logs",
-                                 description="Configura i canali e gli eventi di log"),
-            discord.SelectOption(label="🔧 Funzioni", value="features",
-                                 description="Attiva o disattiva le funzioni del bot"),
-            discord.SelectOption(label="🛡️ Moderazione", value="mod",
-                                 description="Antispam, jail, warn, lock, autorole, permessi"),
-            discord.SelectOption(label="📊 Livelli", value="levels",
-                                 description="Sistema XP, premi, multiplier, classifica"),
+            discord.SelectOption(label=_T("dash.log"), value="logs",
+                                 description=_T("dash.configura_canali_eventi_log")),
+            discord.SelectOption(label=_T("dash.funzioni"), value="features",
+                                 description=_T("dash.attiva_o_disattiva_funzioni")),
+            discord.SelectOption(label=_T("dash.moderazione"), value="mod",
+                                 description=_T("dash.antispam_jail_warn_lock")),
+            discord.SelectOption(label=_T("dash.livelli"), value="levels",
+                                 description=_T("dash.sistema_xp_premi_multiplier")),
         ]
-        super().__init__(placeholder="Scegli una sezione...", options=options)
+        super().__init__(placeholder=_T("dash.scegli_sezione"), options=options)
 
     async def callback(self, interaction: discord.Interaction):
         if self.values[0] == "logs":
@@ -111,7 +111,7 @@ class LogCategorySelect(discord.ui.Select):
 class LogChannelSelect(discord.ui.ChannelSelect):
     def __init__(self, category: str):
         super().__init__(
-            placeholder="📂 Scegli il canale di log per questa categoria...",
+            placeholder=_T("dash.scegli_canale_log_questa"),
             channel_types=[discord.ChannelType.text],
             min_values=1, max_values=1, row=0,
         )
@@ -137,7 +137,7 @@ class EventiSelect(discord.ui.Select):
             for ek, elabel in events.items()
         ]
         super().__init__(
-            placeholder="✅ Scegli gli eventi da registrare...",
+            placeholder=_T("dash.scegli_eventi_registrare"),
             min_values=0, max_values=len(options), options=options, row=1,
         )
 
@@ -154,7 +154,7 @@ class EventiSelect(discord.ui.Select):
 class QuoteChannelSelect(discord.ui.ChannelSelect):
     def __init__(self):
         super().__init__(
-            placeholder="📂 Scegli il canale dove pubblicare le quote...",
+            placeholder=_T("dash.scegli_canale_dove_pubblicare"),
             channel_types=[discord.ChannelType.text],
             min_values=1, max_values=1, row=1,
         )
@@ -169,7 +169,7 @@ class QuoteChannelSelect(discord.ui.ChannelSelect):
 
 class QuoteResetButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Usa il canale del comando", emoji="♻️",
+        super().__init__(label=_T("dash.usa_canale_comando"), emoji="♻️",
                          style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
@@ -204,7 +204,7 @@ def _desc_azione(action: str, seconds: int = 0) -> str:
 class WarnCountSelect(discord.ui.Select):
     def __init__(self):
         options = [discord.SelectOption(label=f"{i} warn", value=str(i)) for i in range(1, 11)]
-        super().__init__(placeholder="1️⃣ Numero di warn...", options=options, row=0)
+        super().__init__(placeholder=_T("dash.1_numero_warn"), options=options, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         self.view.pending_count = int(self.values[0])
@@ -214,14 +214,14 @@ class WarnCountSelect(discord.ui.Select):
 class WarnActionSelect(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="Timeout 10 minuti", value="timeout:600"),
-            discord.SelectOption(label="Timeout 1 ora", value="timeout:3600"),
-            discord.SelectOption(label="Timeout 12 ore", value="timeout:43200"),
-            discord.SelectOption(label="Timeout 1 giorno", value="timeout:86400"),
-            discord.SelectOption(label="Kick", value="kick:0"),
-            discord.SelectOption(label="Ban", value="ban:0"),
+            discord.SelectOption(label=_T("dash.timeout_10_minuti"), value="timeout:600"),
+            discord.SelectOption(label=_T("dash.timeout_1_ora"), value="timeout:3600"),
+            discord.SelectOption(label=_T("dash.timeout_12_ore"), value="timeout:43200"),
+            discord.SelectOption(label=_T("dash.timeout_1_giorno"), value="timeout:86400"),
+            discord.SelectOption(label=_T("dash.kick"), value="kick:0"),
+            discord.SelectOption(label=_T("dash.ban"), value="ban:0"),
         ]
-        super().__init__(placeholder="2️⃣ Azione da applicare...", options=options, row=1)
+        super().__init__(placeholder=_T("dash.2_azione_applicare"), options=options, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         azione, secondi = self.values[0].split(":")
@@ -232,7 +232,7 @@ class WarnActionSelect(discord.ui.Select):
 
 class AddRuleButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Aggiungi regola", emoji="➕", style=discord.ButtonStyle.success, row=2)
+        super().__init__(label=_T("dash.aggiungi_regola"), emoji="➕", style=discord.ButtonStyle.success, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         v = self.view
@@ -257,7 +257,7 @@ class RemoveRuleSelect(discord.ui.Select):
                                  value=str(r["count"]))
             for r in regole
         ]
-        super().__init__(placeholder="🗑️ Rimuovi una regola...", options=options, row=3)
+        super().__init__(placeholder=_T("dash.rimuovi_regola"), options=options, row=3)
 
     async def callback(self, interaction: discord.Interaction):
         count = int(self.values[0])
@@ -269,16 +269,31 @@ class RemoveRuleSelect(discord.ui.Select):
 
 
 # ── VIEW ──────────────────────────────────────────────────────────────────────
+# Config del server della view attualmente in costruzione.
+# BaseView.__init__ la imposta PRIMA che la sottoclasse aggiunga i componenti,
+# così ogni Select/Button può tradurre le proprie etichette senza doversi far
+# passare la config nel costruttore. È sicuro perché costruire una view è
+# un'operazione sincrona: non c'è nessun await che possa interlacciare due view.
+_CTX = {"config": None}
+
+
+def _T(key: str, **kwargs) -> str:
+    """Testo nella lingua del server della view in costruzione."""
+    return t(_CTX["config"], key, **kwargs)
+
+
 class BaseView(discord.ui.View):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(timeout=300)
         self.author_id = author_id
         self.guild = guild
+        self.config = db.get_log_config(guild.id)
+        _CTX["config"] = self.config
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author_id:
             await interaction.response.send_message(
-                "❌ Solo chi ha aperto la dashboard può usarla.", ephemeral=True
+                t(db.get_log_config(interaction.guild_id), "dash.only_owner"), ephemeral=True
             )
             return False
         return True
@@ -311,7 +326,7 @@ class DashboardView(BaseView):
 
 class OpenLogBlacklistButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Canali blacklist", emoji="📵", style=discord.ButtonStyle.secondary, row=1)
+        super().__init__(label=_T("dash.canali_blacklist"), emoji="📵", style=discord.ButtonStyle.secondary, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         v = LogBlacklistView(self.view.author_id, self.view.guild)
@@ -320,7 +335,7 @@ class OpenLogBlacklistButton(discord.ui.Button):
 
 class BlacklistChannelsSelect(discord.ui.ChannelSelect):
     def __init__(self, ids):
-        super().__init__(placeholder="Canali esclusi dai log (testuali + vocali)...",
+        super().__init__(placeholder=_T("dash.canali_esclusi_dai_log"),
                          channel_types=[discord.ChannelType.text, discord.ChannelType.voice],
                          min_values=0, max_values=25, row=0,
                          default_values=_dv(ids, discord.SelectDefaultValueType.channel))
@@ -335,7 +350,7 @@ class BlacklistChannelsSelect(discord.ui.ChannelSelect):
 
 class BlacklistSecretSelect(discord.ui.ChannelSelect):
     def __init__(self):
-        super().__init__(placeholder="🕵️ Canale segreto dove mandare quei log (opzionale)...",
+        super().__init__(placeholder=_T("dash.canale_segreto_dove_mandare"),
                          channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=1)
 
     async def callback(self, interaction: discord.Interaction):
@@ -348,7 +363,7 @@ class BlacklistSecretSelect(discord.ui.ChannelSelect):
 
 class BlacklistSecretResetButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Ignora invece di redirigere", emoji="🚫",
+        super().__init__(label=_T("dash.ignora_invece_redirigere"), emoji="🚫",
                          style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
@@ -373,13 +388,13 @@ class LogBlacklistView(BaseView):
         chans = bl.get("channels", [])
         secret = bl.get("secret_channel")
         embed = discord.Embed(
-            title="📵 Canali blacklist (log)",
+            title=_T("dash.canali_blacklist_log"),
             description=("I log dei canali selezionati **non** finiscono nei log normali.\n"
                          "Se imposti un **canale segreto**, vengono rediretti lì; altrimenti vengono **ignorati**."),
             color=BLU,
         )
-        embed.add_field(name="Canali esclusi", value=f"{len(chans)} canali" if chans else "*nessuno*", inline=False)
-        embed.add_field(name="🕵️ Canale segreto",
+        embed.add_field(name=_T("dash.canali_esclusi"), value=f"{len(chans)} canali" if chans else "*nessuno*", inline=False)
+        embed.add_field(name=_T("dash.canale_segreto"),
                         value=f"<#{secret}>" if secret else "Nessuno (i log vengono ignorati)", inline=False)
         return embed
 
@@ -405,11 +420,11 @@ class LogsMenuView(BaseView):
                 stato = "❌ non configurato"
             righe.append(f"**{label}** — {stato}")
         embed = discord.Embed(
-            title="📋 Log",
-            description="Scegli una categoria dal menu per configurarla.",
+            title=_T("dash.log"),
+            description=_T("dash.scegli_categoria_dal_menu"),
             color=BLU,
         )
-        embed.add_field(name="Categorie", value="\n".join(righe), inline=False)
+        embed.add_field(name=_T("dash.categorie"), value="\n".join(righe), inline=False)
         return embed
 
 
@@ -433,9 +448,9 @@ class CategoryView(BaseView):
             for ek, elabel in events.items()
         ]
         embed = discord.Embed(title=f"Configura {label} Log", color=BLU)
-        embed.add_field(name="📂 Canale", value=f"<#{ch}>" if ch else "❌ nessuno", inline=False)
-        embed.add_field(name="Eventi", value="\n".join(righe), inline=False)
-        embed.set_footer(text="Scegli il canale e spunta gli eventi da registrare")
+        embed.add_field(name=_T("dash.canale"), value=f"<#{ch}>" if ch else "❌ nessuno", inline=False)
+        embed.add_field(name=_T("dash.eventi"), value="\n".join(righe), inline=False)
+        embed.set_footer(text=_T("dash.scegli_canale_spunta_eventi"))
         return embed
 
 
@@ -454,12 +469,12 @@ class QuoteSettingsView(BaseView):
         cid = config.get("quote_channel")
         dove = f"<#{cid}> (canale fisso)" if cid else "Nel canale dove viene usato il comando"
         embed = discord.Embed(
-            title="💬 Quote",
-            description="Attiva/disattiva la funzione e scegli dove pubblicare le citazioni.",
+            title=_T("dash.quote"),
+            description=_T("dash.attiva_disattiva_funzione_scegli"),
             color=BLU,
         )
-        embed.add_field(name="Stato", value=attiva, inline=False)
-        embed.add_field(name="📍 Destinazione", value=dove, inline=False)
+        embed.add_field(name=_T("dash.stato"), value=attiva, inline=False)
+        embed.add_field(name=_T("dash.destinazione"), value=dove, inline=False)
         return embed
 
 
@@ -487,16 +502,16 @@ class WarnActionsView(BaseView):
             testo = "*Nessuna regola impostata.*"
 
         embed = discord.Embed(
-            title="⚠️ Regole automatiche Warn",
-            description="Imposta un'azione automatica al raggiungimento di un certo numero di warn.",
+            title=_T("dash.regole_automatiche_warn"),
+            description=_T("dash.imposta_azione_automatica_al"),
             color=BLU,
         )
-        embed.add_field(name="Regole attive", value=testo, inline=False)
+        embed.add_field(name=_T("dash.regole_attive"), value=testo, inline=False)
         if self.pending_count is not None or self.pending_action is not None:
             c = self.pending_count if self.pending_count is not None else "?"
             a = _desc_azione(self.pending_action, self.pending_seconds) if self.pending_action else "?"
-            embed.add_field(name="✏️ Nuova regola", value=f"{c} warn → {a}", inline=False)
-        embed.set_footer(text="Scegli numero + azione, poi premi Aggiungi regola")
+            embed.add_field(name=_T("dash.nuova_regola"), value=f"{c} warn → {a}", inline=False)
+        embed.set_footer(text=_T("dash.scegli_numero_azione_poi"))
         return embed
 
     async def refresh(self, interaction: discord.Interaction):
@@ -505,7 +520,7 @@ class WarnActionsView(BaseView):
 
 class DMLockButton(discord.ui.Button):
     def __init__(self, attivo: bool):
-        super().__init__(label="DM Lock", emoji="🔒",
+        super().__init__(label=_T("dash.dm_lock"), emoji="🔒",
                          style=discord.ButtonStyle.success if attivo else discord.ButtonStyle.danger, row=1)
 
     async def callback(self, interaction: discord.Interaction):
@@ -529,7 +544,7 @@ class DMLockButton(discord.ui.Button):
 
 class JoinLockButton(discord.ui.Button):
     def __init__(self, attivo: bool):
-        super().__init__(label="Join Lock", emoji="🚪",
+        super().__init__(label=_T("dash.join_lock"), emoji="🚪",
                          style=discord.ButtonStyle.success if attivo else discord.ButtonStyle.danger, row=1)
 
     async def callback(self, interaction: discord.Interaction):
@@ -553,7 +568,7 @@ class JoinLockButton(discord.ui.Button):
 
 class SetupJailButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Setup", emoji="🛠️", style=discord.ButtonStyle.success, row=0)
+        super().__init__(label=_T("dash.setup"), emoji="🛠️", style=discord.ButtonStyle.success, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         guild = interaction.guild
@@ -571,7 +586,7 @@ class SetupJailButton(discord.ui.Button):
         await interaction.response.defer()
         try:
             if not role:
-                role = await guild.create_role(name="Jailed", colour=discord.Colour.dark_grey(),
+                role = await guild.create_role(name=_T("dash.jailed"), colour=discord.Colour.dark_grey(),
                                                reason="Setup Jail")
             if not channel:
                 overwrites = {
@@ -604,7 +619,7 @@ class SetupJailButton(discord.ui.Button):
 
 class UpdateJailButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Aggiorna canali", emoji="🔄", style=discord.ButtonStyle.secondary, row=0)
+        super().__init__(label=_T("dash.aggiorna_canali"), emoji="🔄", style=discord.ButtonStyle.secondary, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         guild = interaction.guild
@@ -629,7 +644,7 @@ class UpdateJailButton(discord.ui.Button):
 
 class JailLogSelect(discord.ui.ChannelSelect):
     def __init__(self):
-        super().__init__(placeholder="📂 Canale log jail/unjail...",
+        super().__init__(placeholder=_T("dash.canale_log_jail_unjail"),
                          channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=1)
 
     async def callback(self, interaction: discord.Interaction):
@@ -662,7 +677,7 @@ class JailView(BaseView):
         log_txt = log.mention if log else "❌ non impostato"
 
         embed = discord.Embed(
-            title="🔒 Jail",
+            title=_T("dash.jail2"),
             description=(
                 "Sistema di isolamento: chi è in jail vede **solo** il canale jail.\n\n"
                 "• **Setup** — crea il ruolo *Jailed* e il canale *jail*, e nasconde tutti i canali\n"
@@ -671,8 +686,8 @@ class JailView(BaseView):
             ),
             color=BLU,
         )
-        embed.add_field(name="Stato", value=stato, inline=False)
-        embed.add_field(name="📂 Canale log", value=log_txt, inline=False)
+        embed.add_field(name=_T("dash.stato"), value=stato, inline=False)
+        embed.add_field(name=_T("dash.canale_log"), value=log_txt, inline=False)
         return embed
 
 
@@ -685,10 +700,10 @@ class DMLockView(BaseView):
     def build_embed(self) -> discord.Embed:
         stato = "🟢 In pausa" if self.guild.dms_paused() else "🔴 Attivi"
         embed = discord.Embed(
-            title="🔒 DM Lock",
-            description="Mette in pausa i DM tra i membri del server (durata max 24h, limite di Discord).",
+            title=_T("dash.dm_lock2"),
+            description=_T("dash.mette_pausa_dm_tra"),
             color=BLU)
-        embed.add_field(name="Stato", value=stato, inline=False)
+        embed.add_field(name=_T("dash.stato"), value=stato, inline=False)
         return embed
 
 
@@ -701,25 +716,25 @@ class JoinLockView(BaseView):
     def build_embed(self) -> discord.Embed:
         stato = "🟢 In pausa" if self.guild.invites_paused() else "🔴 Attivi"
         embed = discord.Embed(
-            title="🚪 Join Lock",
-            description="Mette in pausa gli inviti: nessuno può entrare (durata max 24h, limite di Discord).",
+            title=_T("dash.join_lock2"),
+            description=_T("dash.mette_pausa_inviti_nessuno"),
             color=BLU)
-        embed.add_field(name="Stato", value=stato, inline=False)
+        embed.add_field(name=_T("dash.stato"), value=stato, inline=False)
         return embed
 
 
 class ModSectionSelect(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="🚨 Antispam", value="antispam", description="Protezione spam/raid/scam"),
-            discord.SelectOption(label="🔒 Jail", value="jail", description="Sistema di isolamento"),
-            discord.SelectOption(label="⚠️ Regole Warn", value="warn", description="Azioni automatiche sui warn"),
-            discord.SelectOption(label="🎭 Autorole", value="autorole", description="Ruoli automatici all'ingresso"),
-            discord.SelectOption(label="🔑 Permessi", value="permessi", description="Chi può usare warn/jail/lock"),
-            discord.SelectOption(label="🔒 DM Lock", value="dmlock", description="Pausa DM del server"),
-            discord.SelectOption(label="🚪 Join Lock", value="joinlock", description="Pausa inviti del server"),
+            discord.SelectOption(label=_T("dash.antispam3"), value="antispam", description=_T("dash.protezione_spam_raid_scam")),
+            discord.SelectOption(label=_T("dash.jail2"), value="jail", description=_T("dash.sistema_isolamento")),
+            discord.SelectOption(label=_T("dash.regole_warn"), value="warn", description=_T("dash.azioni_automatiche_sui_warn")),
+            discord.SelectOption(label=_T("dash.autorole2"), value="autorole", description=_T("dash.ruoli_automatici_all_ingresso")),
+            discord.SelectOption(label=_T("dash.permessi2"), value="permessi", description=_T("dash.chi_puo_usare_warn")),
+            discord.SelectOption(label=_T("dash.dm_lock2"), value="dmlock", description=_T("dash.pausa_dm_server")),
+            discord.SelectOption(label=_T("dash.join_lock2"), value="joinlock", description=_T("dash.pausa_inviti_server")),
         ]
-        super().__init__(placeholder="Scegli cosa configurare...", options=options)
+        super().__init__(placeholder=_T("dash.scegli_cosa_configurare"), options=options)
 
     async def callback(self, interaction: discord.Interaction):
         a, g = self.view.author_id, self.view.guild
@@ -746,11 +761,11 @@ class ModerationView(BaseView):
         n_regole = len(config.get("warn_actions", []))
 
         embed = discord.Embed(
-            title="🛡️ Moderazione",
-            description="Seleziona cosa configurare dal menu qui sotto.",
+            title=_T("dash.moderazione"),
+            description=_T("dash.seleziona_cosa_configurare_dal"),
             color=BLU,
         )
-        embed.add_field(name="Stato rapido", value=(
+        embed.add_field(name=_T("dash.stato_rapido"), value=(
             f"🚨 Antispam: {antispam}\n"
             f"🔒 DM Lock: {dm}\n"
             f"🚪 Join Lock: {join}\n"
@@ -768,7 +783,7 @@ def _antispam_cfg(guild_id):
 
 class ToggleAntispamButton(discord.ui.Button):
     def __init__(self, attivo: bool):
-        super().__init__(label="Antispam", emoji="🚨",
+        super().__init__(label=_T("dash.antispam"), emoji="🚨",
                          style=discord.ButtonStyle.success if attivo else discord.ButtonStyle.danger, row=0)
 
     async def callback(self, interaction: discord.Interaction):
@@ -781,7 +796,7 @@ class ToggleAntispamButton(discord.ui.Button):
 
 class ToggleAntiscamButton(discord.ui.Button):
     def __init__(self, attivo: bool):
-        super().__init__(label="Anti-scam (link)", emoji="🎣",
+        super().__init__(label=_T("dash.anti_scam_link"), emoji="🎣",
                          style=discord.ButtonStyle.success if attivo else discord.ButtonStyle.danger, row=0)
 
     async def callback(self, interaction: discord.Interaction):
@@ -794,7 +809,7 @@ class ToggleAntiscamButton(discord.ui.Button):
 
 class AntispamLogSelect(discord.ui.ChannelSelect):
     def __init__(self):
-        super().__init__(placeholder="📂 Canale dei log antispam...",
+        super().__init__(placeholder=_T("dash.canale_log_antispam"),
                          channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=1)
 
     async def callback(self, interaction: discord.Interaction):
@@ -807,7 +822,7 @@ class AntispamLogSelect(discord.ui.ChannelSelect):
 
 class OpenWhitelistButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Whitelist", emoji="✅", style=discord.ButtonStyle.secondary, row=2)
+        super().__init__(label=_T("dash.whitelist"), emoji="✅", style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         v = WhitelistView(self.view.author_id, self.view.guild)
@@ -816,7 +831,7 @@ class OpenWhitelistButton(discord.ui.Button):
 
 class OpenCategoriesButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Categorie & Sanzioni", emoji="⚙️", style=discord.ButtonStyle.secondary, row=2)
+        super().__init__(label=_T("dash.categorie_sanzioni"), emoji="⚙️", style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         v = SpamCategoriesView(self.view.author_id, self.view.guild)
@@ -839,15 +854,15 @@ class AntispamView(BaseView):
         wl = asc.get("whitelist", {})
         log = f"<#{asc['log_channel']}>" if asc.get("log_channel") else "❌ non impostato"
         embed = discord.Embed(
-            title="🚨 Antispam",
-            description="Protezione automatica contro spam, raid e truffe.",
+            title=_T("dash.antispam3"),
+            description=_T("dash.protezione_automatica_contro_spam"),
             color=BLU,
         )
-        embed.add_field(name="Stato", value="🟢 Attivo" if asc.get("enabled") else "🔴 Disattivo", inline=True)
-        embed.add_field(name="Anti-scam", value="🟢 Attivo" if asc.get("antiscam") else "🔴 Disattivo", inline=True)
-        embed.add_field(name="📂 Canale log", value=log, inline=False)
+        embed.add_field(name=_T("dash.stato"), value=_T("dash.attivo") if asc.get("enabled") else "🔴 Disattivo", inline=True)
+        embed.add_field(name=_T("dash.anti_scam"), value=_T("dash.attivo") if asc.get("antiscam") else "🔴 Disattivo", inline=True)
+        embed.add_field(name=_T("dash.canale_log"), value=log, inline=False)
         embed.add_field(
-            name="✅ Whitelist",
+            name=_T("dash.whitelist2"),
             value=(f"{len(wl.get('channels', []))} canali, "
                    f"{len(wl.get('roles', []))} ruoli, "
                    f"{len(wl.get('users', []))} utenti"),
@@ -863,7 +878,7 @@ def _dv(ids, tipo):
 
 class WLChannelSelect(discord.ui.ChannelSelect):
     def __init__(self, ids):
-        super().__init__(placeholder="Canali esenti...", min_values=0, max_values=25, row=0,
+        super().__init__(placeholder=_T("dash.canali_esenti"), min_values=0, max_values=25, row=0,
                          channel_types=[discord.ChannelType.text, discord.ChannelType.voice],
                          default_values=_dv(ids, discord.SelectDefaultValueType.channel))
 
@@ -877,7 +892,7 @@ class WLChannelSelect(discord.ui.ChannelSelect):
 
 class WLRoleSelect(discord.ui.RoleSelect):
     def __init__(self, ids):
-        super().__init__(placeholder="Ruoli esenti...", min_values=0, max_values=25, row=1,
+        super().__init__(placeholder=_T("dash.ruoli_esenti"), min_values=0, max_values=25, row=1,
                          default_values=_dv(ids, discord.SelectDefaultValueType.role))
 
     async def callback(self, interaction: discord.Interaction):
@@ -890,7 +905,7 @@ class WLRoleSelect(discord.ui.RoleSelect):
 
 class WLUserSelect(discord.ui.UserSelect):
     def __init__(self, ids):
-        super().__init__(placeholder="Utenti esenti...", min_values=0, max_values=25, row=2,
+        super().__init__(placeholder=_T("dash.utenti_esenti"), min_values=0, max_values=25, row=2,
                          default_values=_dv(ids, discord.SelectDefaultValueType.user))
 
     async def callback(self, interaction: discord.Interaction):
@@ -912,9 +927,8 @@ class WhitelistView(BaseView):
 
     def build_embed(self) -> discord.Embed:
         embed = discord.Embed(
-            title="✅ Whitelist Antispam",
-            description="Canali, ruoli e utenti esentati dall'antispam.\n"
-                        "Seleziona tutti quelli desiderati in ogni menu (la selezione sostituisce la lista).",
+            title=_T("dash.whitelist_antispam"),
+            description=_T("dash.canali_ruoli_utenti_esentati"),
             color=BLU,
         )
         return embed
@@ -924,7 +938,7 @@ class WhitelistView(BaseView):
 class SpamCategorySelect(discord.ui.Select):
     def __init__(self, config=None):
         options = [discord.SelectOption(label=t(config, lab), value=k) for k, lab in SPAM_CATEGORIES.items()]
-        super().__init__(placeholder="Scegli una categoria da configurare...", options=options, row=0)
+        super().__init__(placeholder=_T("dash.scegli_categoria_configurare"), options=options, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         v = SpamCategoryConfigView(self.view.author_id, self.view.guild, self.values[0])
@@ -947,15 +961,15 @@ class SpamCategoriesView(BaseView):
             if c["sanction"] == "timeout" and c["seconds"]:
                 sanz += f" {c['seconds'] // 60}min"
             righe.append(f"{stato} **{t(config, lab)}** → {sanz}")
-        embed = discord.Embed(title="⚙️ Categorie & Sanzioni", color=BLU,
+        embed = discord.Embed(title=_T("dash.categorie_sanzioni2"), color=BLU,
                               description="\n".join(righe))
-        embed.set_footer(text="Scegli una categoria per modificarla")
+        embed.set_footer(text=_T("dash.scegli_categoria_modificarla"))
         return embed
 
 
 class ToggleCategoryButton(discord.ui.Button):
     def __init__(self, category, attivo):
-        super().__init__(label="Attiva/Disattiva", emoji="🔘",
+        super().__init__(label=_T("dash.attiva_disattiva"), emoji="🔘",
                          style=discord.ButtonStyle.success if attivo else discord.ButtonStyle.danger, row=2)
         self.category = category
 
@@ -974,7 +988,7 @@ class SanctionSelect(discord.ui.Select):
         self.category = category
         options = [discord.SelectOption(label=t(config, lab), value=k, default=(k == corrente))
                    for k, lab in SANCTIONS.items()]
-        super().__init__(placeholder="Sanzione...", options=options, row=0)
+        super().__init__(placeholder=_T("dash.sanzione2"), options=options, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         config = _antispam_cfg(interaction.guild_id)
@@ -991,7 +1005,7 @@ class SanctionDurationSelect(discord.ui.Select):
         opzioni = [("10 minuti", 600), ("1 ora", 3600), ("12 ore", 43200), ("1 giorno", 86400)]
         options = [discord.SelectOption(label=lab, value=str(s), default=(s == corrente))
                    for lab, s in opzioni]
-        super().__init__(placeholder="Durata timeout...", options=options, row=1)
+        super().__init__(placeholder=_T("dash.durata_timeout"), options=options, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         config = _antispam_cfg(interaction.guild_id)
@@ -1017,18 +1031,18 @@ class SpamCategoryConfigView(BaseView):
         c = categoria_cfg(config, self.category)
         sanz = t(config, SANCTIONS.get(c["sanction"], c["sanction"]))
         embed = discord.Embed(title="⚙️ " + t(config, SPAM_CATEGORIES[self.category]), color=BLU)
-        embed.add_field(name="Stato", value="🟢 Attiva" if c["enabled"] else "🔴 Disattiva", inline=True)
-        embed.add_field(name="Sanzione", value=sanz, inline=True)
+        embed.add_field(name=_T("dash.stato"), value=_T("dash.attiva") if c["enabled"] else "🔴 Disattiva", inline=True)
+        embed.add_field(name=_T("dash.sanzione"), value=sanz, inline=True)
         if c["sanction"] == "timeout":
-            embed.add_field(name="Durata", value=f"{c.get('seconds', 600) // 60} min", inline=True)
-        embed.set_footer(text="La durata vale solo per la sanzione Timeout")
+            embed.add_field(name=_T("dash.durata"), value=f"{c.get('seconds', 600) // 60} min", inline=True)
+        embed.set_footer(text=_T("dash.durata_vale_solo_sanzione"))
         return embed
 
 
 # ── CONFESSION ────────────────────────────────────────────────────────────────
 class ConfessionChannelSelect(discord.ui.ChannelSelect):
     def __init__(self):
-        super().__init__(placeholder="📢 Canale delle confessioni...",
+        super().__init__(placeholder=_T("dash.canale_confessioni2"),
                          channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=1)
 
     async def callback(self, interaction: discord.Interaction):
@@ -1041,7 +1055,7 @@ class ConfessionChannelSelect(discord.ui.ChannelSelect):
 
 class ConfessionLogSelect(discord.ui.ChannelSelect):
     def __init__(self):
-        super().__init__(placeholder="🕵️ Canale log staff (anti-abuso)...",
+        super().__init__(placeholder=_T("dash.canale_log_staff_anti"),
                          channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=2)
 
     async def callback(self, interaction: discord.Interaction):
@@ -1067,20 +1081,20 @@ class ConfessionSettingsView(BaseView):
         ch = self.guild.get_channel(cfg["confession_channel"]) if cfg and cfg["confession_channel"] else None
         log = self.guild.get_channel(cfg["log_channel"]) if cfg and cfg["log_channel"] else None
         embed = discord.Embed(
-            title="🤫 Confession",
-            description="Attiva/disattiva la funzione e imposta i canali delle confessioni anonime.",
+            title=_T("dash.confession"),
+            description=_T("dash.attiva_disattiva_funzione_imposta"),
             color=BLU,
         )
-        embed.add_field(name="Stato", value=attiva, inline=False)
-        embed.add_field(name="📢 Canale confessioni", value=ch.mention if ch else "❌ non impostato", inline=False)
-        embed.add_field(name="🕵️ Log staff", value=log.mention if log else "❌ non impostato (opzionale)", inline=False)
+        embed.add_field(name=_T("dash.stato"), value=attiva, inline=False)
+        embed.add_field(name=_T("dash.canale_confessioni"), value=ch.mention if ch else "❌ non impostato", inline=False)
+        embed.add_field(name=_T("dash.log_staff"), value=log.mention if log else "❌ non impostato (opzionale)", inline=False)
         return embed
 
 
 # ── AUTOROLE ──────────────────────────────────────────────────────────────────
 class AutoroleSelect(discord.ui.RoleSelect):
     def __init__(self, ids):
-        super().__init__(placeholder="🎭 Ruoli da assegnare all'ingresso...",
+        super().__init__(placeholder=_T("dash.ruoli_assegnare_all_ingresso"),
                          min_values=0, max_values=10, row=0,
                          default_values=_dv(ids, discord.SelectDefaultValueType.role))
 
@@ -1104,12 +1118,11 @@ class AutoroleView(BaseView):
         ruoli = [self.guild.get_role(r) for r in ids]
         ruoli = [r.mention for r in ruoli if r]
         embed = discord.Embed(
-            title="🎭 Autorole",
-            description="Ruoli assegnati automaticamente a chi entra nel server.\n"
-                        "Seleziona i ruoli desiderati nel menu (la selezione sostituisce la lista).",
+            title=_T("dash.autorole2"),
+            description=_T("dash.ruoli_assegnati_automaticamente_chi"),
             color=BLU,
         )
-        embed.add_field(name="Ruoli attivi", value=" ".join(ruoli) if ruoli else "*nessuno*", inline=False)
+        embed.add_field(name=_T("dash.ruoli_attivi"), value=" ".join(ruoli) if ruoli else "*nessuno*", inline=False)
         return embed
 
 
@@ -1147,7 +1160,7 @@ class PermissionsView(BaseView):
     def build_embed(self) -> discord.Embed:
         perms = db.get_log_config(self.guild.id).get("mod_perms", {})
         embed = discord.Embed(
-            title="🔑 Permessi comandi moderazione",
+            title=_T("dash.permessi_comandi_moderazione"),
             description=(
                 "Tra chi **vede** i comandi (ha *Moderare membri*), scegli **quali ruoli** "
                 "possono davvero usarli, per categoria.\n"
@@ -1168,7 +1181,7 @@ class PermissionsView(BaseView):
 # ── PARTNERSHIP ───────────────────────────────────────────────────────────────
 class PartnershipChannelSelect(discord.ui.ChannelSelect):
     def __init__(self):
-        super().__init__(placeholder="📢 Canale dove pubblicare le partner...",
+        super().__init__(placeholder=_T("dash.canale_dove_pubblicare_partner"),
                          channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=1)
 
     async def callback(self, interaction: discord.Interaction):
@@ -1181,7 +1194,7 @@ class PartnershipChannelSelect(discord.ui.ChannelSelect):
 
 class PartnershipRolesSelect(discord.ui.RoleSelect):
     def __init__(self, ids):
-        super().__init__(placeholder="🎭 Ruoli che possono fare partnership...",
+        super().__init__(placeholder=_T("dash.ruoli_possono_fare_partnership"),
                          min_values=0, max_values=15, row=2,
                          default_values=_dv(ids, discord.SelectDefaultValueType.role))
 
@@ -1195,29 +1208,29 @@ class PartnershipRolesSelect(discord.ui.RoleSelect):
 
 class PingConfigButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Configura ping", emoji="🔔", style=discord.ButtonStyle.secondary, row=0)
+        super().__init__(label=_T("dash.configura_ping"), emoji="🔔", style=discord.ButtonStyle.secondary, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(PingConfigModal(self.view))
 
 
-class PingConfigModal(discord.ui.Modal, title="Configura ping"):
+class PingConfigModal(discord.ui.Modal, title=_T("dash.configura_ping")):
     def __init__(self, parent_view):
         super().__init__()
         self.parent_view = parent_view
         ping = db.get_log_config(parent_view.guild.id).get("partnership", {}).get("ping", {})
         self.here = discord.ui.TextInput(
-            label="Membri richiesti per pingare @here", required=False, max_length=10,
+            label=_T("dash.membri_richiesti_pingare_here"), required=False, max_length=10,
             default=str(ping.get("here") or ""), placeholder="es. 500")
         self.everyone = discord.ui.TextInput(
-            label="Membri richiesti per pingare @everyone", required=False, max_length=10,
-            default=str(ping.get("everyone") or ""), placeholder="es. 1000")
+            label=_T("dash.membri_richiesti_pingare_everyone"), required=False, max_length=10,
+            default=str(ping.get("everyone") or ""), placeholder=_T("dash.es_1000"))
         self.custom_role = discord.ui.TextInput(
-            label="Ping personalizzato (ID ruolo)", required=False, max_length=25,
-            default=str(ping.get("custom_role") or ""), placeholder="ID del ruolo")
+            label=_T("dash.ping_personalizzato_id_ruolo"), required=False, max_length=25,
+            default=str(ping.get("custom_role") or ""), placeholder=_T("dash.ph_role_id"))
         self.custom_members = discord.ui.TextInput(
-            label="Ping personalizzato (membri richiesti)", required=False, max_length=10,
-            default=str(ping.get("custom_members") or ""), placeholder="numero di membri")
+            label=_T("dash.ping_personalizzato_membri_richiesti"), required=False, max_length=10,
+            default=str(ping.get("custom_members") or ""), placeholder=_T("dash.ph_member_count"))
         for it in (self.here, self.everyone, self.custom_role, self.custom_members):
             self.add_item(it)
 
@@ -1267,17 +1280,17 @@ class PartnershipSettingsView(BaseView):
             ping_lines.append(f"<@&{ping['custom_role']}> da **{ping['custom_members']}** membri")
 
         embed = discord.Embed(
-            title="🤝 Partnership",
+            title=_T("dash.partnership"),
             description=("Sistema di partnership: chi è autorizzato usa `/partnership` per "
                          "pubblicare una partner nel canale dedicato.\n"
                          "Imposta il canale, i ruoli abilitati e i ping in base ai membri."),
             color=BLU,
         )
-        embed.add_field(name="Stato", value=attiva, inline=False)
-        embed.add_field(name="📢 Canale partner", value=ch.mention if ch else "❌ non impostato", inline=False)
-        embed.add_field(name="🎭 Ruoli autorizzati",
+        embed.add_field(name=_T("dash.stato"), value=attiva, inline=False)
+        embed.add_field(name=_T("dash.canale_partner"), value=ch.mention if ch else "❌ non impostato", inline=False)
+        embed.add_field(name=_T("dash.ruoli_autorizzati"),
                         value=" ".join(roles) if roles else "*nessuno (solo admin)*", inline=False)
-        embed.add_field(name="🔔 Ping", value="\n".join(ping_lines) if ping_lines else "*nessuno*", inline=False)
+        embed.add_field(name=_T("dash.ping"), value="\n".join(ping_lines) if ping_lines else "*nessuno*", inline=False)
         return embed
 
 
@@ -1303,7 +1316,7 @@ def _automsg_get(config, msg_id):
 
 class AutoMsgChannelSelect(discord.ui.ChannelSelect):
     def __init__(self):
-        super().__init__(placeholder="📢 Canale degli auto-message...",
+        super().__init__(placeholder=_T("dash.canale_degli_auto_message"),
                          channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=1)
 
     async def callback(self, interaction: discord.Interaction):
@@ -1316,18 +1329,18 @@ class AutoMsgChannelSelect(discord.ui.ChannelSelect):
 
 class AutoMsgModal(discord.ui.Modal):
     def __init__(self, author_id, guild, msg_id=None):
-        super().__init__(title="Auto Message")
+        super().__init__(title=_T("dash.auto_message"))
         self.author_id = author_id
         self.guild = guild
         self.msg_id = msg_id
         ex = (_automsg_get(db.get_log_config(guild.id), msg_id) or {}) if msg_id is not None else {}
-        self.titolo = discord.ui.TextInput(label="Titolo (per ricordartelo)", max_length=100,
-                                           default=ex.get("title", ""), placeholder="es. Buongiorno")
-        self.orario = discord.ui.TextInput(label="Orario (HH:MM, ora IT)", max_length=5,
+        self.titolo = discord.ui.TextInput(label=_T("dash.titolo_ricordartelo"), max_length=100,
+                                           default=ex.get("title", ""), placeholder=_T("dash.ph_example_title"))
+        self.orario = discord.ui.TextInput(label=_T("dash.orario_hh_mm_ora"), max_length=5,
                                            default=ex.get("time", "08:00"))
-        self.messaggio = discord.ui.TextInput(label="Messaggio", style=discord.TextStyle.paragraph,
+        self.messaggio = discord.ui.TextInput(label=_T("dash.messaggio"), style=discord.TextStyle.paragraph,
                                               max_length=1500, default=ex.get("message", ""),
-                                              placeholder="☀️ Buongiorno {server}!")
+                                              placeholder=_T("dash.ph_example_greet"))
         for it in (self.titolo, self.orario, self.messaggio):
             self.add_item(it)
 
@@ -1350,7 +1363,7 @@ class AutoMsgModal(discord.ui.Modal):
 
 class AutoMsgAddButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="➕ Aggiungi messaggio", style=discord.ButtonStyle.success, row=0)
+        super().__init__(label=_T("dash.aggiungi_messaggio"), style=discord.ButtonStyle.success, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(AutoMsgModal(self.view.author_id, self.view.guild))
@@ -1360,7 +1373,7 @@ class AutoMsgManageSelect(discord.ui.Select):
     def __init__(self, messages):
         options = [discord.SelectOption(label=f"{m.get('title', '?')} ({m.get('time', '?')})"[:100],
                                         value=str(m.get("id"))) for m in messages[:25]]
-        super().__init__(placeholder="✏️ Modifica / elimina un messaggio...", options=options, row=2)
+        super().__init__(placeholder=_T("dash.modifica_elimina_messaggio"), options=options, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         v = AutoMsgEditView(self.view.author_id, self.view.guild, int(self.values[0]))
@@ -1369,7 +1382,7 @@ class AutoMsgManageSelect(discord.ui.Select):
 
 class AutoMsgEditButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="✏️ Modifica", style=discord.ButtonStyle.secondary, row=0)
+        super().__init__(label=_T("dash.modifica"), style=discord.ButtonStyle.secondary, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(
@@ -1378,7 +1391,7 @@ class AutoMsgEditButton(discord.ui.Button):
 
 class AutoMsgDeleteButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="🗑️ Elimina", style=discord.ButtonStyle.danger, row=0)
+        super().__init__(label=_T("dash.elimina2"), style=discord.ButtonStyle.danger, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
@@ -1391,7 +1404,7 @@ class AutoMsgDeleteButton(discord.ui.Button):
 
 class AutoMsgBackButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Indietro", emoji="⬅️", style=discord.ButtonStyle.secondary, row=0)
+        super().__init__(label=_T("dash.indietro"), emoji="⬅️", style=discord.ButtonStyle.secondary, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         v = AutoMsgView(self.view.author_id, self.view.guild)
@@ -1409,8 +1422,8 @@ class AutoMsgEditView(BaseView):
     def build_embed(self) -> discord.Embed:
         m = _automsg_get(db.get_log_config(self.guild.id), self.msg_id) or {}
         embed = discord.Embed(title=f"📨 {m.get('title', '?')}", color=BLU)
-        embed.add_field(name="🕐 Orario", value=m.get("time", "?"), inline=False)
-        embed.add_field(name="💬 Messaggio", value=(m.get("message") or "*vuoto*")[:1000], inline=False)
+        embed.add_field(name=_T("dash.orario"), value=m.get("time", "?"), inline=False)
+        embed.add_field(name=_T("dash.messaggio2"), value=(m.get("message") or "*vuoto*")[:1000], inline=False)
         return embed
 
 
@@ -1435,15 +1448,15 @@ class AutoMsgView(BaseView):
         ch = self.guild.get_channel(am.get("channel")) if am.get("channel") else None
         righe = [f"• **{m.get('title')}** — {m.get('time')}" for m in am.get("messages", [])]
         embed = discord.Embed(
-            title="📨 Auto Message",
+            title=_T("dash.auto_message2"),
             description=("Messaggi automatici inviati a un orario fisso (**ora italiana**).\n"
                          "Aggiungine quanti vuoi: ognuno ha **titolo**, **orario** e **testo**."),
             color=BLU,
         )
-        embed.add_field(name="Stato", value=attiva, inline=False)
-        embed.add_field(name="📢 Canale", value=ch.mention if ch else "❌ non impostato", inline=False)
-        embed.add_field(name="Messaggi", value="\n".join(righe)[:1000] if righe else "*nessuno*", inline=False)
-        embed.add_field(name="Variabili", value="`{server}` · `{membercount}`", inline=False)
+        embed.add_field(name=_T("dash.stato"), value=attiva, inline=False)
+        embed.add_field(name=_T("dash.canale3"), value=ch.mention if ch else "❌ non impostato", inline=False)
+        embed.add_field(name=_T("dash.messaggi"), value="\n".join(righe)[:1000] if righe else "*nessuno*", inline=False)
+        embed.add_field(name=_T("dash.variabili"), value="`{server}` · `{membercount}`", inline=False)
         return embed
 
 
@@ -1499,12 +1512,12 @@ def _autoreact_ensure_ids(guild_id):
 
 
 # — aggiunta regole —
-class AutoReactWordModal(discord.ui.Modal, title="Reaction su parola"):
+class AutoReactWordModal(discord.ui.Modal, title=_T("dash.reaction_parola")):
     def __init__(self, author_id, guild):
         super().__init__()
         self.author_id = author_id
         self.guild = guild
-        self.parola = discord.ui.TextInput(label="Parola / frase", max_length=100)
+        self.parola = discord.ui.TextInput(label=_T("dash.parola_frase"), max_length=100)
         self.add_item(self.parola)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -1522,7 +1535,7 @@ class AutoReactWordModal(discord.ui.Modal, title="Reaction su parola"):
 
 class AutoReactUserSelect(discord.ui.UserSelect):
     def __init__(self):
-        super().__init__(placeholder="Scegli l'utente (reagisce quando viene pingato)...",
+        super().__init__(placeholder=_T("dash.scegli_l_utente_reagisce"),
                          min_values=1, max_values=1, row=0)
 
     async def callback(self, interaction: discord.Interaction):
@@ -1538,7 +1551,7 @@ class AutoReactUserSelect(discord.ui.UserSelect):
 
 class AutoReactBackButton(discord.ui.Button):
     def __init__(self, row=1):
-        super().__init__(label="Indietro", emoji="⬅️", style=discord.ButtonStyle.secondary, row=row)
+        super().__init__(label=_T("dash.indietro"), emoji="⬅️", style=discord.ButtonStyle.secondary, row=row)
 
     async def callback(self, interaction: discord.Interaction):
         v = AutoReactView(self.view.author_id, self.view.guild)
@@ -1554,7 +1567,7 @@ class AutoReactAddUserView(BaseView):
 
 class AutoReactAddWordButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="➕ Parola", style=discord.ButtonStyle.success, row=0)
+        super().__init__(label=_T("dash.parola"), style=discord.ButtonStyle.success, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(AutoReactWordModal(self.view.author_id, self.view.guild))
@@ -1562,18 +1575,18 @@ class AutoReactAddWordButton(discord.ui.Button):
 
 class AutoReactAddUserButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="➕ @Utente", style=discord.ButtonStyle.success, row=0)
+        super().__init__(label=_T("dash.utente"), style=discord.ButtonStyle.success, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         v = AutoReactAddUserView(self.view.author_id, self.view.guild)
-        embed = discord.Embed(title="➕ Reaction su utente",
-                              description="Scegli l'utente: il bot reagirà quando viene **pingato**.", color=BLU)
+        embed = discord.Embed(title=_T("dash.reaction_utente"),
+                              description=_T("dash.scegli_l_utente_bot"), color=BLU)
         await interaction.response.edit_message(embed=embed, view=v)
 
 
 class AutoReactBlacklistSelect(discord.ui.ChannelSelect):
     def __init__(self, ids):
-        super().__init__(placeholder="Canali dove NON reagire...",
+        super().__init__(placeholder=_T("dash.canali_dove_non_reagire"),
                          channel_types=[discord.ChannelType.text, discord.ChannelType.category],
                          min_values=0, max_values=25, row=1,
                          default_values=_dv(ids, discord.SelectDefaultValueType.channel))
@@ -1665,7 +1678,7 @@ class EmojiPageButton(discord.ui.Button):
         await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
 
 
-class RuleEmojiModal(discord.ui.Modal, title="Emoji (scrivi o cerca)"):
+class RuleEmojiModal(discord.ui.Modal, title=_T("dash.emoji_scrivi_o_cerca")):
     def __init__(self, author_id, guild, rule_id):
         super().__init__()
         self.author_id = author_id
@@ -1673,9 +1686,9 @@ class RuleEmojiModal(discord.ui.Modal, title="Emoji (scrivi o cerca)"):
         self.rule_id = rule_id
         r = _autoreact_get(db.get_log_config(guild.id), rule_id) or {}
         self.emoji = discord.ui.TextInput(
-            label="Emoji o nomi (max 5, separati da spazio)", required=False,
+            label=_T("dash.emoji_o_nomi_max"), required=False,
             default=" ".join(r.get("emojis", [])),
-            placeholder="😀  :nomeemoji:  fuoco  <:custom:123>", max_length=200)
+            placeholder=_T("dash.nomeemoji_fuoco_custom_123"), max_length=200)
         self.add_item(self.emoji)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -1690,21 +1703,21 @@ class RuleEmojiModal(discord.ui.Modal, title="Emoji (scrivi o cerca)"):
 
 class RuleEmojiTextButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="🔤 Emoji a mano", style=discord.ButtonStyle.secondary, row=2)
+        super().__init__(label=_T("dash.emoji_mano"), style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(
             RuleEmojiModal(self.view.author_id, self.view.guild, self.view.rule_id))
 
 
-class RuleWordEditModal(discord.ui.Modal, title="Cambia parola"):
+class RuleWordEditModal(discord.ui.Modal, title=_T("dash.cambia_parola")):
     def __init__(self, author_id, guild, rule_id):
         super().__init__()
         self.author_id = author_id
         self.guild = guild
         self.rule_id = rule_id
         r = _autoreact_get(db.get_log_config(guild.id), rule_id) or {}
-        self.parola = discord.ui.TextInput(label="Parola / frase", default=r.get("trigger", ""), max_length=100)
+        self.parola = discord.ui.TextInput(label=_T("dash.parola_frase"), default=r.get("trigger", ""), max_length=100)
         self.add_item(self.parola)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -1719,7 +1732,7 @@ class RuleWordEditModal(discord.ui.Modal, title="Cambia parola"):
 
 class RuleEditWordButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="✏️ Cambia parola", style=discord.ButtonStyle.secondary, row=2)
+        super().__init__(label=_T("dash.cambia_parola2"), style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(
@@ -1747,7 +1760,7 @@ class RuleModeButton(discord.ui.Button):
 
 class RuleDeleteButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="🗑️ Elimina", style=discord.ButtonStyle.danger, row=2)
+        super().__init__(label=_T("dash.elimina2"), style=discord.ButtonStyle.danger, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
@@ -1785,9 +1798,9 @@ class RuleEditView(BaseView):
         else:
             modo = "solo la parola esatta" if r.get("mode") == "exact" else "se la parola è contenuta"
             quando = f"parola `{r.get('trigger')}` ({modo})"
-        embed = discord.Embed(title="✏️ Modifica reaction", color=BLU,
+        embed = discord.Embed(title=_T("dash.modifica_reaction"), color=BLU,
                               description=f"**Quando:** {quando}\n**Emoji:** {emo}")
-        embed.set_footer(text="Emoji dal menu (server) oppure 'Emoji a mano' per unicode/altre.")
+        embed.set_footer(text=_T("dash.emoji_dal_menu_server"))
         return embed
 
 
@@ -1825,16 +1838,16 @@ class AutoReactView(BaseView):
                 modo = "solo la parola" if r.get("mode") == "exact" else "se contenuta"
                 righe.append(f"• `{r.get('trigger')}` ({modo}) → {emo}")
         embed = discord.Embed(
-            title="⭐ Reaction automatiche",
+            title=_T("dash.reaction_automatiche"),
             description=("Il bot reagisce quando un messaggio contiene una **parola** "
                          "(esatta o contenuta) o quando un **utente** viene pingato. Max 5 emoji a regola.\n"
                          "Seleziona una regola dal menu per **modificarla** (emoji, parola, eliminarla)."),
             color=BLU,
         )
-        embed.add_field(name="Stato", value=attiva, inline=False)
-        embed.add_field(name="Regole", value="\n".join(righe)[:1000] if righe else "*nessuna*", inline=False)
+        embed.add_field(name=_T("dash.stato"), value=attiva, inline=False)
+        embed.add_field(name=_T("dash.regole"), value="\n".join(righe)[:1000] if righe else "*nessuna*", inline=False)
         bl = ar.get("blacklist_channels", [])
-        embed.add_field(name="🚫 Canali esclusi", value=f"{len(bl)} canali" if bl else "*nessuno*", inline=False)
+        embed.add_field(name=_T("dash.canali_esclusi2"), value=f"{len(bl)} canali" if bl else "*nessuno*", inline=False)
         return embed
 
 
@@ -2005,7 +2018,7 @@ class FeatureToggleButton(discord.ui.Button):
     def __init__(self, key: str, enabled: bool):
         # Il pulsante mostra l'AZIONE, non lo stato (quello è già nell'embed):
         # "Attiva" verde, "Disattiva" rosso.
-        super().__init__(label="Disattiva" if enabled else "Attiva",
+        super().__init__(label=_T("dash.disattiva") if enabled else "Attiva",
                          emoji="🔴" if enabled else "🟢",
                          style=discord.ButtonStyle.danger if enabled else discord.ButtonStyle.success, row=0)
         self.key = key
@@ -2057,11 +2070,11 @@ class FeaturesView(BaseView):
         feats = config.get("features", {})
         righe = [f"{'🟢' if feats.get(k, True) else '🔴'} {t(config, lab)}" for k, lab in FEATURES.items()]
         embed = discord.Embed(
-            title="🔧 Funzioni del bot",
-            description="Seleziona una funzione dal menu per attivarla/disattivarla e configurarla.",
+            title=_T("dash.funzioni_bot"),
+            description=_T("dash.seleziona_funzione_dal_menu"),
             color=BLU,
         )
-        embed.add_field(name="Stato", value="\n".join(righe), inline=False)
+        embed.add_field(name=_T("dash.stato"), value="\n".join(righe), inline=False)
         return embed
 
 
@@ -2080,7 +2093,7 @@ class ProfileSectionSelect(discord.ui.Select):
             ("⭐ Custom reactions", "react", "Ruoli abilitati e numero max di emoji"),
             ("🏅 Ruolo primario", "primary", "Ruolo speciale mostrato nel profilo"),
         ]
-        super().__init__(placeholder="Apri una sotto-sezione...", row=1,
+        super().__init__(placeholder=_T("dash.apri_sotto_sezione"), row=1,
                          options=[discord.SelectOption(label=l, value=v, description=d) for l, v, d in opts])
 
     async def callback(self, interaction: discord.Interaction):
@@ -2106,22 +2119,22 @@ class ProfileDashView(BaseView):
         allowed = prof.get("custom_react", {}).get("allowed_roles", [])
         primary = prof.get("primary_roles", {})
         embed = discord.Embed(
-            title="👤 Profilo utente",
-            description="Comando `+profile`. Da qui gestisci i permessi e le assegnazioni.",
+            title=_T("dash.profilo_utente"),
+            description=_T("dash.comando_profile_qui_gestisci"),
             color=BLU,
         )
-        embed.add_field(name="Stato", value=attiva, inline=False)
-        embed.add_field(name="🛡️ Bypass privacy", value=f"{len(bypass)} ruoli", inline=True)
-        embed.add_field(name="🔊 Vocali private", value=f"{len(voices)} assegnate", inline=True)
-        embed.add_field(name="⭐ Custom reactions", value=f"{len(allowed)} ruoli", inline=True)
-        embed.add_field(name="🏅 Ruoli primari", value=f"{len(primary)} assegnati", inline=True)
-        embed.set_footer(text="Scegli una sotto-sezione dal menu")
+        embed.add_field(name=_T("dash.stato"), value=attiva, inline=False)
+        embed.add_field(name=_T("dash.bypass_privacy"), value=f"{len(bypass)} ruoli", inline=True)
+        embed.add_field(name=_T("dash.vocali_private"), value=f"{len(voices)} assegnate", inline=True)
+        embed.add_field(name=_T("dash.custom_reactions"), value=f"{len(allowed)} ruoli", inline=True)
+        embed.add_field(name=_T("dash.ruoli_primari"), value=f"{len(primary)} assegnati", inline=True)
+        embed.set_footer(text=_T("dash.scegli_sotto_sezione_dal"))
         return embed
 
 
 class BypassRolesSelect(discord.ui.RoleSelect):
     def __init__(self, current):
-        super().__init__(placeholder="Ruoli che ignorano la privacy altrui...",
+        super().__init__(placeholder=_T("dash.ruoli_ignorano_privacy_altrui"),
                          min_values=0, max_values=10, row=0)
 
     async def callback(self, interaction: discord.Interaction):
@@ -2144,17 +2157,17 @@ class BypassRolesView(BaseView):
         ids = prof.get("privacy_bypass_roles", [])
         testo = " ".join(f"<@&{r}>" for r in ids) if ids else "*Nessuno (solo l'interessato vede)*"
         embed = discord.Embed(
-            title="🛡️ Bypass privacy",
-            description="Questi ruoli possono vedere **avatar/banner/quote** anche di chi ha la privacy attiva.",
+            title=_T("dash.bypass_privacy"),
+            description=_T("dash.questi_ruoli_possono_vedere"),
             color=BLU,
         )
-        embed.add_field(name="Ruoli abilitati", value=testo, inline=False)
+        embed.add_field(name=_T("dash.ruoli_abilitati"), value=testo, inline=False)
         return embed
 
 
 class PrivateVoiceChannelSelect(discord.ui.ChannelSelect):
     def __init__(self):
-        super().__init__(placeholder="1️⃣ Canale vocale...", row=0,
+        super().__init__(placeholder=_T("dash.1_canale_vocale"), row=0,
                          channel_types=[discord.ChannelType.voice], min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
@@ -2164,7 +2177,7 @@ class PrivateVoiceChannelSelect(discord.ui.ChannelSelect):
 
 class PrivateVoiceUserSelect(discord.ui.UserSelect):
     def __init__(self):
-        super().__init__(placeholder="2️⃣ Utente a cui assegnarla...", row=1, min_values=1, max_values=1)
+        super().__init__(placeholder=_T("dash.2_utente_cui_assegnarla"), row=1, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
         self.view.pending_user = self.values[0].id
@@ -2173,7 +2186,7 @@ class PrivateVoiceUserSelect(discord.ui.UserSelect):
 
 class PrivateVoiceLinkButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Collega", emoji="🔗", style=discord.ButtonStyle.success, row=2)
+        super().__init__(label=_T("dash.collega"), emoji="🔗", style=discord.ButtonStyle.success, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         v = self.view
@@ -2201,7 +2214,7 @@ class PrivateVoiceRemoveSelect(discord.ui.Select):
             options.append(discord.SelectOption(
                 label=(ch.name if ch else f"canale {cid}")[:80], value=str(cid),
                 description=f"Assegnata a un utente ({uid})"))
-        super().__init__(placeholder="🗑️ Rimuovi un'assegnazione...", row=3,
+        super().__init__(placeholder=_T("dash.rimuovi_assegnazione"), row=3,
                          options=options or [discord.SelectOption(label="—", value="_")],
                          disabled=not options)
 
@@ -2237,21 +2250,21 @@ class PrivateVoiceView(BaseView):
         else:
             testo = "*Nessuna vocale assegnata.*"
         embed = discord.Embed(
-            title="🔊 Vocali private",
-            description="Crea tu il canale, poi scegli **canale + utente** e premi Collega.",
+            title=_T("dash.vocali_private"),
+            description=_T("dash.crea_tu_canale_poi"),
             color=BLU,
         )
-        embed.add_field(name="Assegnazioni", value=testo, inline=False)
+        embed.add_field(name=_T("dash.assegnazioni"), value=testo, inline=False)
         if self.pending_channel or self.pending_user:
             c = f"<#{self.pending_channel}>" if self.pending_channel else "?"
             u = f"<@{self.pending_user}>" if self.pending_user else "?"
-            embed.add_field(name="✏️ In attesa", value=f"{c} → {u}", inline=False)
+            embed.add_field(name=_T("dash.attesa"), value=f"{c} → {u}", inline=False)
         return embed
 
 
 class CustomReactRolesSelect(discord.ui.RoleSelect):
     def __init__(self):
-        super().__init__(placeholder="Ruoli abilitati alle custom reactions...",
+        super().__init__(placeholder=_T("dash.ruoli_abilitati_alle_custom"),
                          min_values=0, max_values=25, row=0)
 
     async def callback(self, interaction: discord.Interaction):
@@ -2276,7 +2289,7 @@ class CustomReactMaxSelect(discord.ui.Select):
     def __init__(self, current):
         opts = [discord.SelectOption(label=f"{n} emoji", value=str(n), default=(n == current))
                 for n in range(1, 6)]
-        super().__init__(placeholder="Numero massimo di emoji...", row=1, options=opts)
+        super().__init__(placeholder=_T("dash.numero_massimo_emoji"), row=1, options=opts)
 
     async def callback(self, interaction: discord.Interaction):
         config, prof = _profile_cfg(interaction.guild_id)
@@ -2288,7 +2301,7 @@ class CustomReactMaxSelect(discord.ui.Select):
 
 class CustomReactUserPick(discord.ui.UserSelect):
     def __init__(self):
-        super().__init__(placeholder="✏️ Modifica la reaction al tag di un utente...",
+        super().__init__(placeholder=_T("dash.modifica_reaction_al_tag"),
                          min_values=1, max_values=1, row=2)
 
     async def callback(self, interaction: discord.Interaction):
@@ -2313,21 +2326,18 @@ class CustomReactView(BaseView):
         allowed = cr.get("allowed_roles", [])
         testo = " ".join(f"<@&{r}>" for r in allowed) if allowed else "*Nessuno*"
         embed = discord.Embed(
-            title="⭐ Custom reactions",
-            description="Chi ha uno dei ruoli abilitati imposta dal `+profile` le emoji con cui il bot "
-                        "reagisce **quando viene taggato**.\n"
-                        "Sono le stesse regole 'mention' dell'Autoreact: modificarle qui o nel profilo "
-                        "è la stessa cosa.",
+            title=_T("dash.custom_reactions"),
+            description=_T("dash.chi_ha_uno_ruoli"),
             color=BLU,
         )
-        embed.add_field(name="Ruoli abilitati", value=testo, inline=False)
-        embed.add_field(name="Max emoji a testa", value=str(cr.get("max", 3)), inline=False)
+        embed.add_field(name=_T("dash.ruoli_abilitati"), value=testo, inline=False)
+        embed.add_field(name=_T("dash.max_emoji_testa"), value=str(cr.get("max", 3)), inline=False)
         return embed
 
 
 class PrimaryRoleUserSelect(discord.ui.UserSelect):
     def __init__(self):
-        super().__init__(placeholder="1️⃣ Utente...", row=0, min_values=1, max_values=1)
+        super().__init__(placeholder=_T("dash.1_utente"), row=0, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
         self.view.pending_user = self.values[0].id
@@ -2336,7 +2346,7 @@ class PrimaryRoleUserSelect(discord.ui.UserSelect):
 
 class PrimaryRoleRoleSelect(discord.ui.RoleSelect):
     def __init__(self):
-        super().__init__(placeholder="2️⃣ Ruolo primario...", row=1, min_values=1, max_values=1)
+        super().__init__(placeholder=_T("dash.2_ruolo_primario"), row=1, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
         self.view.pending_role = self.values[0].id
@@ -2345,7 +2355,7 @@ class PrimaryRoleRoleSelect(discord.ui.RoleSelect):
 
 class PrimaryRoleAssignButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Assegna", emoji="✅", style=discord.ButtonStyle.success, row=2)
+        super().__init__(label=_T("dash.assegna"), emoji="✅", style=discord.ButtonStyle.success, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         v = self.view
@@ -2364,7 +2374,7 @@ class PrimaryRoleRemoveSelect(discord.ui.Select):
     def __init__(self, primary):
         options = [discord.SelectOption(label=f"utente {uid}", value=str(uid))
                    for uid in list(primary.keys())[:25]]
-        super().__init__(placeholder="🗑️ Rimuovi un'assegnazione...", row=3,
+        super().__init__(placeholder=_T("dash.rimuovi_assegnazione"), row=3,
                          options=options or [discord.SelectOption(label="—", value="_")],
                          disabled=not options)
 
@@ -2395,15 +2405,15 @@ class PrimaryRoleView(BaseView):
         else:
             testo = "*Nessuna assegnazione.*"
         embed = discord.Embed(
-            title="🏅 Ruolo primario",
-            description="Il ruolo speciale mostrato in cima al `+profile` dell'utente.",
+            title=_T("dash.ruolo_primario"),
+            description=_T("dash.ruolo_speciale_mostrato_cima"),
             color=BLU,
         )
-        embed.add_field(name="Assegnazioni", value=testo, inline=False)
+        embed.add_field(name=_T("dash.assegnazioni"), value=testo, inline=False)
         if self.pending_user or self.pending_role:
             u = f"<@{self.pending_user}>" if self.pending_user else "?"
             r = f"<@&{self.pending_role}>" if self.pending_role else "?"
-            embed.add_field(name="✏️ In attesa", value=f"{u} → {r}", inline=False)
+            embed.add_field(name=_T("dash.attesa"), value=f"{u} → {r}", inline=False)
         return embed
 
 
@@ -2425,16 +2435,16 @@ def _new_cat_id(prof: dict) -> str:
 
 class CategoryModal(discord.ui.Modal):
     def __init__(self, author_id, guild, cat_id=None):
-        super().__init__(title="Categoria ruoli")
+        super().__init__(title=_T("dash.categoria_ruoli"))
         self.author_id = author_id
         self.guild = guild
         self.cat_id = cat_id
         cat = {}
         if cat_id:
             cat = db.get_log_config(guild.id).get("profile", {}).get("role_categories", {}).get(cat_id, {})
-        self.nome = discord.ui.TextInput(label="Nome", max_length=80,
-                                         default=cat.get("name", ""), placeholder="Provenienza")
-        self.emoji = discord.ui.TextInput(label="Emoji (opzionale)", required=False,
+        self.nome = discord.ui.TextInput(label=_T("dash.nome"), max_length=80,
+                                         default=cat.get("name", ""), placeholder=_T("dash.ph_category_example"))
+        self.emoji = discord.ui.TextInput(label=_T("dash.emoji_opzionale"), required=False,
                                           max_length=40, default=cat.get("emoji", ""))
         self.add_item(self.nome)
         self.add_item(self.emoji)
@@ -2454,7 +2464,7 @@ class CategoryModal(discord.ui.Modal):
 
 class NewCategoryButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Nuova categoria", emoji="➕",
+        super().__init__(label=_T("dash.nuova_categoria"), emoji="➕",
                          style=discord.ButtonStyle.success, row=0)
 
     async def callback(self, interaction: discord.Interaction):
@@ -2468,7 +2478,7 @@ class CategoryEditSelect(discord.ui.Select):
                                         emoji=_dash_emoji(c.get("emoji")),
                                         description=f"{len(c.get('roles', []))} ruoli")
                    for cid, c in list(cats.items())[:25]]
-        super().__init__(placeholder="Modifica una categoria...", options=options, row=1)
+        super().__init__(placeholder=_T("dash.modifica_categoria"), options=options, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         v = RoleCategoryEditView(self.view.author_id, self.view.guild, self.values[0])
@@ -2495,17 +2505,17 @@ class RoleCategoriesView(BaseView):
         else:
             testo = "*Nessuna categoria. Creane una con ➕.*"
         embed = discord.Embed(
-            title="🎭 Categorie ruoli",
-            description="Categorie di self-role che gli utenti scelgono dal `+profile` → Ruoli.",
+            title=_T("dash.categorie_ruoli"),
+            description=_T("dash.categorie_self_role_utenti"),
             color=BLU,
         )
-        embed.add_field(name="Categorie", value=testo, inline=False)
+        embed.add_field(name=_T("dash.categorie"), value=testo, inline=False)
         return embed
 
 
 class CategoryRolesSelect(discord.ui.RoleSelect):
     def __init__(self, cat_id):
-        super().__init__(placeholder="Ruoli di questa categoria...",
+        super().__init__(placeholder=_T("dash.ruoli_questa_categoria"),
                          min_values=0, max_values=25, row=0)
         self.cat_id = cat_id
 
@@ -2521,7 +2531,7 @@ class CategoryRolesSelect(discord.ui.RoleSelect):
 
 class SingleMultiToggle(discord.ui.Button):
     def __init__(self, cat_id, single):
-        super().__init__(label="Scelta: singola" if single else "Scelta: multipla",
+        super().__init__(label=_T("dash.scelta_singola") if single else "Scelta: multipla",
                          emoji="1️⃣" if single else "🔢",
                          style=discord.ButtonStyle.secondary, row=1)
         self.cat_id = cat_id
@@ -2538,7 +2548,7 @@ class SingleMultiToggle(discord.ui.Button):
 
 class RenameCategoryButton(discord.ui.Button):
     def __init__(self, cat_id):
-        super().__init__(label="Rinomina", emoji="✏️",
+        super().__init__(label=_T("dash.rinomina"), emoji="✏️",
                          style=discord.ButtonStyle.secondary, row=1)
         self.cat_id = cat_id
 
@@ -2549,7 +2559,7 @@ class RenameCategoryButton(discord.ui.Button):
 
 class DeleteCategoryButton(discord.ui.Button):
     def __init__(self, cat_id):
-        super().__init__(label="Elimina", emoji="🗑️",
+        super().__init__(label=_T("dash.elimina"), emoji="🗑️",
                          style=discord.ButtonStyle.danger, row=1)
         self.cat_id = cat_id
 
@@ -2578,13 +2588,13 @@ class RoleCategoryEditView(BaseView):
         testo = " ".join(f"<@&{r}>" for r in roles) if roles else "*Nessuno*"
         embed = discord.Embed(
             title=f"{cat.get('emoji', '')} {cat.get('name', 'Categoria')}".strip(),
-            description="Scegli i ruoli, il tipo di scelta e (se vuoi) rinomina o elimina.",
+            description=_T("dash.scegli_ruoli_tipo_scelta"),
             color=BLU,
         )
-        embed.add_field(name="Tipo",
-                        value="Scelta singola (un solo ruolo)" if cat.get("single")
+        embed.add_field(name=_T("dash.tipo"),
+                        value=_T("dash.scelta_singola_solo_ruolo") if cat.get("single")
                         else "Scelta multipla (più ruoli)", inline=False)
-        embed.add_field(name="Ruoli", value=testo, inline=False)
+        embed.add_field(name=_T("dash.ruoli"), value=testo, inline=False)
         return embed
 
 
@@ -2604,17 +2614,17 @@ class LevelToggleButton(discord.ui.Button):
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
-class XpCooldownModal(discord.ui.Modal, title="XP & Cooldown"):
+class XpCooldownModal(discord.ui.Modal, title=_T("dash.xp_cooldown")):
     def __init__(self, author_id, guild):
         super().__init__()
         self.author_id = author_id
         self.guild = guild
         c = ls.cfg(db.get_log_config(guild.id))
-        self.xp_msg = discord.ui.TextInput(label="XP per messaggio", default=str(c["xp_message"]), max_length=6)
-        self.voice_xp = discord.ui.TextInput(label="XP per intervallo in vocale", default=str(c["voice_xp"]), max_length=6)
-        self.cd_text = discord.ui.TextInput(label="Cooldown chat (es. 60s, 1m)",
+        self.xp_msg = discord.ui.TextInput(label=_T("dash.xp_messaggio"), default=str(c["xp_message"]), max_length=6)
+        self.voice_xp = discord.ui.TextInput(label=_T("dash.xp_intervallo_vocale"), default=str(c["voice_xp"]), max_length=6)
+        self.cd_text = discord.ui.TextInput(label=_T("dash.cooldown_chat_es_60s"),
                                             default=ls.fmt_duration(c["cooldown_text"]), max_length=8)
-        self.cd_voice = discord.ui.TextInput(label="Cooldown vocale (es. 1m, 5m)",
+        self.cd_voice = discord.ui.TextInput(label=_T("dash.cooldown_vocale_es_1m"),
                                              default=ls.fmt_duration(c["cooldown_voice"]), max_length=8)
         for it in (self.xp_msg, self.voice_xp, self.cd_text, self.cd_voice):
             self.add_item(it)
@@ -2640,7 +2650,7 @@ class XpCooldownModal(discord.ui.Modal, title="XP & Cooldown"):
 
 class XpCooldownButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="⚙️ XP & Cooldown", style=discord.ButtonStyle.secondary, row=2)
+        super().__init__(label=_T("dash.xp_cooldown2"), style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(XpCooldownModal(self.view.author_id, self.view.guild))
@@ -2655,7 +2665,7 @@ class LevelSectionSelect(discord.ui.Select):
             ("✨ Multiplier", "multiplier", "Ruoli che danno XP extra"),
             ("🚫 Blacklist", "blacklist", "Ruoli/utenti esclusi dagli XP"),
         ]
-        super().__init__(placeholder="Apri una sotto-sezione...", row=0,
+        super().__init__(placeholder=_T("dash.apri_sotto_sezione"), row=0,
                          options=[discord.SelectOption(label=l, value=v, description=d) for l, v, d in opts])
 
     async def callback(self, interaction: discord.Interaction):
@@ -2682,35 +2692,35 @@ class LevelsView(BaseView):
         c = ls.cfg(db.get_log_config(self.guild.id))
         sn = lambda b: "🟢" if b else "🔴"
         embed = discord.Embed(
-            title="📊 Livelli",
+            title=_T("dash.livelli"),
             description=("Sistema di XP e livelli. Usa il menu in alto per le sotto-sezioni,\n"
                          "i pulsanti per attivare/disattivare e impostare XP/cooldown.\n"
                          "**Coleave**: azzera gli XP quando un utente esce dal server.\n"
                          "**Reward replace** 🟢 = sostituisce i ruoli premio · 🔴 = li accumula."),
             color=BLU,
         )
-        embed.add_field(name="Stato",
+        embed.add_field(name=_T("dash.stato"),
                         value=f"{sn(c['enabled'])} Sistema · {sn(c['text_enabled'])} Chat · {sn(c['voice_enabled'])} Vocale",
                         inline=False)
-        embed.add_field(name="XP per messaggio", value=f"{c['xp_message']}", inline=True)
-        embed.add_field(name="XP per vocale", value=f"{c['voice_xp']}", inline=True)
-        embed.add_field(name="Cooldown",
+        embed.add_field(name=_T("dash.xp_messaggio"), value=f"{c['xp_message']}", inline=True)
+        embed.add_field(name=_T("dash.xp_vocale"), value=f"{c['voice_xp']}", inline=True)
+        embed.add_field(name=_T("dash.cooldown"),
                         value=f"chat {ls.fmt_duration(c['cooldown_text'])} · voce {ls.fmt_duration(c['cooldown_voice'])}",
                         inline=True)
-        embed.add_field(name="Coleave", value=sn(c["coleave"]), inline=True)
-        embed.add_field(name="Reward replace", value=sn(c["reward_replace"]), inline=True)
+        embed.add_field(name=_T("dash.coleave"), value=sn(c["coleave"]), inline=True)
+        embed.add_field(name=_T("dash.reward_replace"), value=sn(c["reward_replace"]), inline=True)
         return embed
 
 
 # — Curva XP (manuale) —
-class CurveAddModal(discord.ui.Modal, title="Aggiungi livello"):
+class CurveAddModal(discord.ui.Modal, title=_T("dash.aggiungi_livello")):
     def __init__(self, author_id, guild):
         super().__init__()
         self.author_id = author_id
         self.guild = guild
-        self.livello = discord.ui.TextInput(label="Livello", placeholder="es. 1", max_length=4)
-        self.xp = discord.ui.TextInput(label="XP per salire al livello successivo",
-                                       placeholder="es. 1000", max_length=9)
+        self.livello = discord.ui.TextInput(label=_T("dash.livello"), placeholder=_T("dash.es_1"), max_length=4)
+        self.xp = discord.ui.TextInput(label=_T("dash.xp_salire_al_livello"),
+                                       placeholder=_T("dash.es_1000"), max_length=9)
         self.add_item(self.livello)
         self.add_item(self.xp)
 
@@ -2726,21 +2736,21 @@ class CurveAddModal(discord.ui.Modal, title="Aggiungi livello"):
 
 class CurveAddButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="➕ Aggiungi / modifica livello", style=discord.ButtonStyle.success, row=0)
+        super().__init__(label=_T("dash.aggiungi_modifica_livello"), style=discord.ButtonStyle.success, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(CurveAddModal(self.view.author_id, self.view.guild))
 
 
-class CurveBulkModal(discord.ui.Modal, title="Import curva in blocco"):
+class CurveBulkModal(discord.ui.Modal, title=_T("dash.import_curva_blocco")):
     def __init__(self, author_id, guild):
         super().__init__()
         self.author_id = author_id
         self.guild = guild
         self.testo = discord.ui.TextInput(
-            label="XP per livello, in ordine dal livello 0",
+            label=_T("dash.xp_livello_ordine_dal"),
             style=discord.TextStyle.paragraph, max_length=4000,
-            placeholder="46, 64, 84, 106, 130, ...  (un numero per livello)")
+            placeholder=_T("dash.46_64_84_106"))
         self.add_item(self.testo)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -2760,7 +2770,7 @@ class CurveBulkModal(discord.ui.Modal, title="Import curva in blocco"):
 
 class CurveBulkButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="📋 Import in blocco", style=discord.ButtonStyle.primary, row=0)
+        super().__init__(label=_T("dash.import_blocco"), style=discord.ButtonStyle.primary, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(CurveBulkModal(self.view.author_id, self.view.guild))
@@ -2768,7 +2778,7 @@ class CurveBulkButton(discord.ui.Button):
 
 class CurveClearButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="🧹 Svuota curva", style=discord.ButtonStyle.danger, row=2)
+        super().__init__(label=_T("dash.svuota_curva"), style=discord.ButtonStyle.danger, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
@@ -2783,7 +2793,7 @@ class CurveRemoveSelect(discord.ui.Select):
         options = []
         for lvl, xp in sorted(curve.items(), key=lambda x: int(x[0]))[:25]:
             options.append(discord.SelectOption(label=f"Livello {lvl} → {xp} XP"[:100], value=str(lvl)))
-        super().__init__(placeholder="🗑️ Rimuovi un livello...", options=options, row=1)
+        super().__init__(placeholder=_T("dash.rimuovi_livello"), options=options, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
@@ -2815,7 +2825,7 @@ class LevelCurveView(BaseView):
             head = "\n".join(f"**Lv {lvl}** → `{xp}`" for lvl, xp in items[:8])
             testo = f"{head}\n… e altri **{len(items) - 8}** livelli impostati"
         embed = discord.Embed(
-            title="📈 Curva XP (manuale)",
+            title=_T("dash.curva_xp_manuale"),
             description=("Imposti tu, livello per livello, quanti XP servono per salire al successivo.\n"
                          "**Import in blocco**: incolli tutti i valori in un colpo (dal livello 0).\n"
                          "I livelli senza valore usano quello del livello impostato più vicino sotto."),
@@ -2828,7 +2838,7 @@ class LevelCurveView(BaseView):
 # — Level-up (canale + messaggio) —
 class LevelUpChannelSelect(discord.ui.ChannelSelect):
     def __init__(self):
-        super().__init__(placeholder="📢 Canale dei messaggi di level-up...",
+        super().__init__(placeholder=_T("dash.canale_messaggi_level_up"),
                          channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=0)
 
     async def callback(self, interaction: discord.Interaction):
@@ -2841,7 +2851,7 @@ class LevelUpChannelSelect(discord.ui.ChannelSelect):
 
 class LevelUpResetButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Usa il canale del messaggio", emoji="♻️", style=discord.ButtonStyle.secondary, row=1)
+        super().__init__(label=_T("dash.usa_canale_messaggio"), emoji="♻️", style=discord.ButtonStyle.secondary, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
@@ -2851,21 +2861,21 @@ class LevelUpResetButton(discord.ui.Button):
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
-class LevelUpMessageModal(discord.ui.Modal, title="Embed level-up"):
+class LevelUpMessageModal(discord.ui.Modal, title=_T("dash.embed_level_up")):
     def __init__(self, author_id, guild):
         super().__init__()
         self.author_id = author_id
         self.guild = guild
         c = ls.cfg(db.get_log_config(guild.id))
         self.titolo = discord.ui.TextInput(
-            label="Titolo", max_length=256, required=False,
+            label=_T("dash.titolo"), max_length=256, required=False,
             default=c["levelup_title"], placeholder="{user_name} leveled up!")
         self.msg = discord.ui.TextInput(
-            label="Testo", style=discord.TextStyle.paragraph, max_length=1500, required=False,
-            default=c["levelup_message"], placeholder="CONGRATS\nSei al livello {level}!")
+            label=_T("dash.testo"), style=discord.TextStyle.paragraph, max_length=1500, required=False,
+            default=c["levelup_message"], placeholder=_T("dash.ph_levelup_msg"))
         self.colore = discord.ui.TextInput(
-            label="Colore embed (hex, vuoto = automatico)", max_length=7, required=False,
-            default=c["levelup_color"], placeholder="es. F1C40F")
+            label=_T("dash.colore_embed_hex_vuoto"), max_length=7, required=False,
+            default=c["levelup_color"], placeholder=_T("dash.es_f1c40f"))
         self.add_item(self.titolo)
         self.add_item(self.msg)
         self.add_item(self.colore)
@@ -2883,7 +2893,7 @@ class LevelUpMessageModal(discord.ui.Modal, title="Embed level-up"):
 
 class LevelUpMessageButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="✏️ Titolo & Testo", style=discord.ButtonStyle.secondary, row=1)
+        super().__init__(label=_T("dash.titolo_testo"), style=discord.ButtonStyle.secondary, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(LevelUpMessageModal(self.view.author_id, self.view.guild))
@@ -2902,20 +2912,20 @@ class LevelUpView(BaseView):
         ch = self.guild.get_channel(c["levelup_channel"]) if c["levelup_channel"] else None
         dove = ch.mention if ch else "Nel canale dove l'utente ha scritto"
         embed = discord.Embed(
-            title="🎉 Embed di level-up",
+            title=_T("dash.embed_level_up2"),
             description=("Embed inviato quando un utente sale di livello (mostra l'avatar dell'utente).\n"
                          "**Variabili:** `{user}` `{user_name}` `{level}` `{server}`"),
             color=BLU,
         )
-        embed.add_field(name="📍 Canale", value=dove, inline=False)
-        embed.add_field(name="🔤 Titolo", value=f"```{(c['levelup_title'] or '—')[:250]}```", inline=False)
-        embed.add_field(name="💬 Testo", value=f"```{(c['levelup_message'] or '—')[:500]}```", inline=False)
-        embed.add_field(name="🎨 Colore", value=f"`#{c['levelup_color']}`" if c['levelup_color'] else "Automatico (colore ruolo)", inline=False)
+        embed.add_field(name=_T("dash.canale2"), value=dove, inline=False)
+        embed.add_field(name=_T("dash.titolo2"), value=f"```{(c['levelup_title'] or '—')[:250]}```", inline=False)
+        embed.add_field(name=_T("dash.testo2"), value=f"```{(c['levelup_message'] or '—')[:500]}```", inline=False)
+        embed.add_field(name=_T("dash.colore"), value=f"`#{c['levelup_color']}`" if c['levelup_color'] else "Automatico (colore ruolo)", inline=False)
         return embed
 
 
 # — Ruoli premio —
-class RewardLevelModal(discord.ui.Modal, title="Ruolo premio"):
+class RewardLevelModal(discord.ui.Modal, title=_T("dash.ruolo_premio")):
     def __init__(self, author_id, guild, role):
         super().__init__()
         self.author_id = author_id
@@ -2936,7 +2946,7 @@ class RewardLevelModal(discord.ui.Modal, title="Ruolo premio"):
 
 class RewardRoleSelect(discord.ui.RoleSelect):
     def __init__(self):
-        super().__init__(placeholder="🏅 Scegli un ruolo da assegnare a un livello...",
+        super().__init__(placeholder=_T("dash.scegli_ruolo_assegnare_livello"),
                          min_values=1, max_values=1, row=0)
 
     async def callback(self, interaction: discord.Interaction):
@@ -2951,7 +2961,7 @@ class RewardRemoveSelect(discord.ui.Select):
             role = guild.get_role(rid)
             nome = role.name if role else f"ruolo {rid}"
             options.append(discord.SelectOption(label=f"Livello {lvl} → {nome}"[:100], value=str(lvl)))
-        super().__init__(placeholder="🗑️ Rimuovi un premio...", options=options, row=1)
+        super().__init__(placeholder=_T("dash.rimuovi_premio"), options=options, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
@@ -2981,18 +2991,18 @@ class LevelRewardsView(BaseView):
         else:
             testo = "*nessun premio impostato*"
         embed = discord.Embed(
-            title="🏅 Ruoli premio",
+            title=_T("dash.ruoli_premio"),
             description=("Assegna un ruolo al raggiungimento di un livello.\n"
                          f"**Reward replace:** {'🟢 sostituisce' if c['reward_replace'] else '🔴 accumula'} "
                          "(modificabile dalla pagina Livelli)."),
             color=BLU,
         )
-        embed.add_field(name="Premi", value=testo, inline=False)
+        embed.add_field(name=_T("dash.premi"), value=testo, inline=False)
         return embed
 
 
 # — Multiplier —
-class MultiplierValueModal(discord.ui.Modal, title="Multiplier ruolo"):
+class MultiplierValueModal(discord.ui.Modal, title=_T("dash.multiplier_ruolo")):
     def __init__(self, author_id, guild, role):
         super().__init__()
         self.author_id = author_id
@@ -3017,7 +3027,7 @@ class MultiplierValueModal(discord.ui.Modal, title="Multiplier ruolo"):
 
 class MultiplierRoleSelect(discord.ui.RoleSelect):
     def __init__(self):
-        super().__init__(placeholder="✨ Scegli un ruolo a cui dare un multiplier...",
+        super().__init__(placeholder=_T("dash.scegli_ruolo_cui_dare"),
                          min_values=1, max_values=1, row=0)
 
     async def callback(self, interaction: discord.Interaction):
@@ -3032,7 +3042,7 @@ class MultiplierRemoveSelect(discord.ui.Select):
             role = guild.get_role(int(rid))
             nome = role.name if role else f"ruolo {rid}"
             options.append(discord.SelectOption(label=f"{nome} ×{val}"[:100], value=str(rid)))
-        super().__init__(placeholder="🗑️ Rimuovi un multiplier...", options=options, row=1)
+        super().__init__(placeholder=_T("dash.rimuovi_multiplier"), options=options, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
@@ -3058,18 +3068,18 @@ class LevelMultiplierView(BaseView):
         else:
             testo = "*nessun multiplier*"
         embed = discord.Embed(
-            title="✨ Multiplier",
-            description="Ruoli che danno XP extra. Se un membro ha più ruoli, vale il **moltiplicatore più alto**.",
+            title=_T("dash.multiplier"),
+            description=_T("dash.ruoli_danno_xp_extra"),
             color=BLU,
         )
-        embed.add_field(name="Multiplier attivi", value=testo, inline=False)
+        embed.add_field(name=_T("dash.multiplier_attivi"), value=testo, inline=False)
         return embed
 
 
 # — Blacklist XP —
 class XpBlacklistRolesSelect(discord.ui.RoleSelect):
     def __init__(self, ids):
-        super().__init__(placeholder="Ruoli esclusi dagli XP...", min_values=0, max_values=25, row=0,
+        super().__init__(placeholder=_T("dash.ruoli_esclusi_dagli_xp"), min_values=0, max_values=25, row=0,
                          default_values=_dv(ids, discord.SelectDefaultValueType.role))
 
     async def callback(self, interaction: discord.Interaction):
@@ -3082,7 +3092,7 @@ class XpBlacklistRolesSelect(discord.ui.RoleSelect):
 
 class XpBlacklistUsersSelect(discord.ui.UserSelect):
     def __init__(self, ids):
-        super().__init__(placeholder="Utenti esclusi dagli XP...", min_values=0, max_values=25, row=1,
+        super().__init__(placeholder=_T("dash.utenti_esclusi_dagli_xp"), min_values=0, max_values=25, row=1,
                          default_values=_dv(ids, discord.SelectDefaultValueType.user))
 
     async def callback(self, interaction: discord.Interaction):
@@ -3095,7 +3105,7 @@ class XpBlacklistUsersSelect(discord.ui.UserSelect):
 
 class XpBlacklistChannelsSelect(discord.ui.ChannelSelect):
     def __init__(self, ids):
-        super().__init__(placeholder="Canali esclusi dagli XP (testo, vocale, categorie)...",
+        super().__init__(placeholder=_T("dash.canali_esclusi_dagli_xp"),
                          channel_types=[discord.ChannelType.text, discord.ChannelType.voice,
                                         discord.ChannelType.category],
                          min_values=0, max_values=25, row=2,
@@ -3121,19 +3131,19 @@ class LevelBlacklistView(BaseView):
     def build_embed(self) -> discord.Embed:
         c = ls.cfg(db.get_log_config(self.guild.id))
         embed = discord.Embed(
-            title="🚫 Blacklist XP",
+            title=_T("dash.blacklist_xp"),
             description=("Ruoli, utenti e canali che **non** danno XP.\n"
                          "Seleziona quelli desiderati nei menu (la selezione sostituisce la lista).\n"
                          "Per i canali puoi scegliere anche una **categoria** intera."),
             color=BLU,
         )
-        embed.add_field(name="Ruoli esclusi",
+        embed.add_field(name=_T("dash.ruoli_esclusi"),
                         value=f"{len(c.get('blacklist_roles', []))} ruoli" if c.get("blacklist_roles") else "*nessuno*",
                         inline=True)
-        embed.add_field(name="Utenti esclusi",
+        embed.add_field(name=_T("dash.utenti_esclusi"),
                         value=f"{len(c.get('blacklist_users', []))} utenti" if c.get("blacklist_users") else "*nessuno*",
                         inline=True)
-        embed.add_field(name="Canali esclusi",
+        embed.add_field(name=_T("dash.canali_esclusi"),
                         value=f"{len(c.get('blacklist_channels', []))} canali" if c.get("blacklist_channels") else "*nessuno*",
                         inline=True)
         return embed
@@ -3144,7 +3154,7 @@ class Dashboard(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="dashboard", description="Apri il pannello di configurazione del server")
+    @app_commands.command(name="dashboard", description=_T("dash.apri_pannello_configurazione_server"))
     @app_commands.default_permissions(administrator=True)
     @app_commands.checks.has_permissions(administrator=True)
     async def dashboard(self, interaction: discord.Interaction):
