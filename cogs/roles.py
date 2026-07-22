@@ -3,19 +3,27 @@ from discord.ext import commands
 from discord import app_commands
 
 import database as db
+from locales import t
+
+
+def _t(ctx_or_inter, key: str, **kwargs) -> str:
+    """Scorciatoia: risolve la lingua del server da ctx o interaction."""
+    gid = getattr(ctx_or_inter, "guild_id", None) or ctx_or_inter.guild.id
+    return t(db.get_log_config(gid), key, **kwargs)
+
 
 
 def _puo_assegnare(interaction: discord.Interaction, ruolo: discord.Role):
     """Controlla se il ruolo è assegnabile da moderatore e bot. Ritorna messaggio d'errore o None."""
     guild = interaction.guild
     if ruolo.is_default():
-        return "❌ Non puoi assegnare il ruolo @everyone."
+        return _t(interaction, "roles.everyone")
     if ruolo.managed:
-        return "❌ Questo ruolo è gestito da un'integrazione e non può essere assegnato manualmente."
+        return _t(interaction, "roles.managed")
     if ruolo >= guild.me.top_role:
-        return "❌ Il mio ruolo è troppo basso: spostalo sopra il ruolo da assegnare."
+        return _t(interaction, "roles.bot_too_low")
     if interaction.user.id != guild.owner_id and ruolo >= interaction.user.top_role:
-        return "❌ Non puoi gestire un ruolo uguale o superiore al tuo."
+        return _t(interaction, "roles.higher")
     return None
 
 
@@ -31,9 +39,9 @@ class Roles(commands.Cog):
 
     async def cog_app_command_error(self, interaction, error):
         if isinstance(error, app_commands.MissingPermissions):
-            msg = "⛔ Ti serve il permesso **Gestisci ruoli**."
+            msg = _t(interaction, "roles.need_perm")
         else:
-            msg = f"❌ Errore: {error}"
+            msg = _t(interaction, "mod.error", error=error)
         if interaction.response.is_done():
             await interaction.followup.send(msg, ephemeral=True)
         else:
@@ -48,10 +56,10 @@ class Roles(commands.Cog):
             await interaction.response.send_message(err, ephemeral=True)
             return
         if ruolo in utente.roles:
-            await interaction.response.send_message(f"❌ {utente.mention} ha già {ruolo.mention}.", ephemeral=True)
+            await interaction.response.send_message(_t(interaction, "roles.already_has", user=utente.mention, role=ruolo.mention), ephemeral=True)
             return
         await utente.add_roles(ruolo, reason=f"/role add da {interaction.user}")
-        await interaction.response.send_message(f"✅ {ruolo.mention} aggiunto a {utente.mention}.")
+        await interaction.response.send_message(_t(interaction, "roles.added", role=ruolo.mention, user=utente.mention))
 
     # ── REMOVE ──────────────────────────────────────────────────────────────────
     @gruppo.command(name="remove", description="Rimuove un ruolo a un utente")
@@ -62,10 +70,10 @@ class Roles(commands.Cog):
             await interaction.response.send_message(err, ephemeral=True)
             return
         if ruolo not in utente.roles:
-            await interaction.response.send_message(f"❌ {utente.mention} non ha {ruolo.mention}.", ephemeral=True)
+            await interaction.response.send_message(_t(interaction, "roles.doesnt_have", user=utente.mention, role=ruolo.mention), ephemeral=True)
             return
         await utente.remove_roles(ruolo, reason=f"/role remove da {interaction.user}")
-        await interaction.response.send_message(f"✅ {ruolo.mention} rimosso a {utente.mention}.")
+        await interaction.response.send_message(_t(interaction, "roles.removed", role=ruolo.mention, user=utente.mention))
 
     # ── OPERAZIONI DI MASSA ─────────────────────────────────────────────────────
     async def _massa(self, interaction, ruolo, azione, filtro, descr):
@@ -92,7 +100,7 @@ class Roles(commands.Cog):
                 pass
 
         verbo = "aggiunto a" if val == "add" else "rimosso da"
-        await interaction.followup.send(f"✅ {ruolo.mention} {verbo} **{count}** {descr}.")
+        await interaction.followup.send(_t(interaction, "roles.mass_done", role=ruolo.mention, verb=verbo, count=count, what=descr))
 
     _AZIONI = [
         app_commands.Choice(name="Aggiungi", value="add"),

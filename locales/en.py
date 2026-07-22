@@ -16,11 +16,105 @@ STRINGS = {
     "lang.placeholder": "🌍 Bot language...",
     "lang.field": "🌍 Language",
 
+    # ── MODERATION ──────────────────────────────────────────────────────────
+    "mod.self_target": "❌ You can't use this command on yourself.",
+    "mod.owner_target": "❌ You can't moderate the server owner.",
+    "mod.higher_role": "❌ You can't moderate a user whose role is equal to or above yours.",
+    "mod.bot_role_low": "❌ My role is too low: move it above the role of the user you want to moderate.",
+    "mod.no_role_perm": "⛔ You don't have a role authorised for this command.",
+    "mod.missing_perm": "⛔ You don't have the required permission for this command: `{perms}`",
+    "mod.bot_missing_perm": "⚠️ I'm missing the required permission: `{perms}`",
+    "mod.generic_error": "❌ An error occurred: {error}",
+    "mod.error": "❌ Error: {error}",
+    "mod.bad_duration": "❌ Invalid duration format. Examples: `30s`, `10m`, `2h`, `7d`",
+    "mod.timeout_max": "❌ The maximum timeout allowed by Discord is **28 days** (`28d`).",
+    "mod.bad_id": "❌ Invalid ID.",
+    "mod.user_not_found": "❌ User not found.",
+    "mod.user_not_banned": "❌ User not found or not banned.",
+    "mod.slowmode_need_value": "❌ Pick a preset or enter a custom value in seconds.",
+    "mod.slowmode_off": "✅ Slowmode disabled.",
+    "mod.slowmode_set": "🐢 Slowmode set to **{value}**.",
+    "mod.no_bans": "✅ There are no banned users in this server.",
+    "mod.cleared": "🗑️ Deleted **{n}** messages.",
+    "mod.warn_self": "❌ You can't warn yourself.",
+    "mod.warn_bot": "❌ You can't warn a bot.",
+    "mod.no_warns": "✅ **{user}** has no warns.",
+    "mod.had_no_warns": "✅ **{user}** had no warns.",
+    "mod.warn_removed": "✅ Warn **#{id}** removed.",
+    "mod.warn_not_found": "❌ No warn with ID #{id}.",
+    "mod.warn_dm_title": "⚠️ You have been warned in {guild}",
+    "mod.warns_title": "⚠️ Warns of {user}",
+    "mod.auto_kick": "👢 Automatic kick",
+    "mod.auto_ban": "🔨 Automatic ban",
+    "mod.auto_failed": "⚠️ Automatic action failed (permissions or role too high)",
+    "mod.jail_not_configured": "❌ The Jail system isn't configured. "
+                               "Go to `/dashboard` → 🛡️ Moderation → 🔒 Jail → **Setup**.",
+    "mod.no_jailed": "✅ No user is currently jailed.",
+    "mod.only_author": "❌ Only the person who used the command can browse it.",
+    "mod.already_jailed": "❌ **{user}** is already jailed.",
+    "mod.not_jailed": "❌ **{user}** isn't jailed.",
+    # moderation embed
+    "mod.embed_reason": "📋 **Reason:**",
+    "mod.embed_moderator": "👤 **Moderator:**",
+    "mod.embed_duration": "🕐 **Duration:**",
+    "mod.embed_purged": "🧹 **Purged:**",
+    "mod.embed_purged_value": "last {days} days",
+    "mod.embed_proof": "🔗 Proof",
+    "mod.embed_attachment": "[Attachment]({url})",
+
+    # ── AVATAR / BANNER ─────────────────────────────────────────────────────
+    "avatar.no_banner": "❌ {user} doesn't have a banner.",
+    "avatar.no_profile_banner": "❌ {user} doesn't have a profile banner.",
+
+    # ── QUOTE ───────────────────────────────────────────────────────────────
+    "quote.only_author": "❌ Only whoever created the quote can edit it.",
+    "quote.disabled": "🚫 The Quote feature is disabled on this server.",
+    "quote.no_text": "❌ This message has no text to quote.",
+    "quote.no_text_short": "❌ That message has no text to quote.",
+    "quote.created": "✅ Quote created in {channel}! Customise it with the buttons on the message.",
+    "quote.font": "🎨 Select font",
+    "quote.background": "Background",
+    "quote.bold": "Bold",
+
+    # ── CONFESSION ──────────────────────────────────────────────────────────
+    "conf.modal_title": "Anonymous confession",
+    "conf.modal_label": "Your confession",
+    "conf.placeholder": "Write here... it stays anonymous 🤫",
+    "conf.disabled_short": "🚫 Confessions are disabled.",
+    "conf.disabled": "🚫 Confessions are disabled on this server.",
+    "conf.not_configured": "❌ Confessions aren't configured.",
+    "conf.not_configured_admin": "❌ Confessions aren't configured. An admin has to set them up "
+                                 "from `/dashboard` → 🔧 Features → Confession.",
+    "conf.channel_gone": "❌ The confessions channel no longer exists.",
+    "conf.no_perm": "⛔ You don't have the required permission for this command.",
+    "conf.published": "✅ Your confession **#{n}** has been published in {channel}!",
+
+    # ── ROLES ───────────────────────────────────────────────────────────────
+    "roles.everyone": "❌ You can't assign the @everyone role.",
+    "roles.managed": "❌ This role is managed by an integration and can't be assigned manually.",
+    "roles.bot_too_low": "❌ My role is too low: move it above the role you want to assign.",
+    "roles.higher": "❌ You can't manage a role equal to or above yours.",
+    "roles.need_perm": "⛔ You need the **Manage Roles** permission.",
+    "roles.already_has": "❌ {user} already has {role}.",
+    "roles.doesnt_have": "❌ {user} doesn't have {role}.",
+    "roles.added": "✅ {role} added to {user}.",
+    "roles.removed": "✅ {role} removed from {user}.",
+    "roles.mass_done": "✅ {role} {verb} **{count}** {what}.",
+
+    # ── PARTNERSHIP ─────────────────────────────────────────────────────────
+    "partner.channel_gone": "❌ The partnerships channel is no longer configured.",
+    "partner.no_write_perm": "❌ I don't have permission to write in the partnerships channel.",
+    "partner.send_error": "❌ Error while sending: {error}",
+    "partner.published": "✅ Partnership published in {channel}!",
+    "partner.disabled": "❌ The **Partnership** feature is disabled on this server.",
+    "partner.no_role": "❌ You don't have a role authorised to make partnerships.",
+
     # ── COUNTING: chat messages ─────────────────────────────────────────────
     "counting.deleted": "⚠️ {user} has deleted their number: ```{n}```"
                         "The next number is **{next}**.",
-    "counting.ruined": "💥 {user} **RUINED IT AT {n}!!** "
-                       "Next number is **1**. {reason}\n{record}",
+    "counting.ruined": "💥 {user} **RUINED IT AT {n}!!**\n"
+                       "Next number is **1**.\n"
+                       "{reason}\n{record}",
     "counting.reason_double": "You can't count twice in a row.",
     "counting.reason_wrong": "Wrong number: it was **{expected}**.",
     "counting.record_new": "🏆 **New record: {record}!**",

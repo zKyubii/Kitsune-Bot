@@ -6,6 +6,14 @@ from discord.ext import commands
 from discord import app_commands
 
 import database as db
+from locales import t
+
+
+def _t(ctx_or_inter, key: str, **kwargs) -> str:
+    """Scorciatoia: risolve la lingua del server da ctx o interaction."""
+    gid = getattr(ctx_or_inter, "guild_id", None) or ctx_or_inter.guild.id
+    return t(db.get_log_config(gid), key, **kwargs)
+
 from logconfig import feature_enabled
 
 SEPARATOR = "─────── ☁️ ───────"
@@ -64,7 +72,7 @@ class PartnerModal(discord.ui.Modal, title="Run a Partner!"):
         channel = interaction.guild.get_channel(p.get("channel")) if p.get("channel") else None
         if not channel:
             return await interaction.response.send_message(
-                "❌ Il canale delle partnership non è più configurato.", ephemeral=True)
+                _t(interaction, "partner.channel_gone"), ephemeral=True)
 
         await interaction.response.defer(ephemeral=True)
         descrizione = self.descrizione.value
@@ -98,14 +106,14 @@ class PartnerModal(discord.ui.Modal, title="Run a Partner!"):
                 allowed_mentions=discord.AllowedMentions(everyone=True, roles=True, users=True))
         except discord.Forbidden:
             return await interaction.followup.send(
-                "❌ Non ho i permessi per scrivere nel canale delle partnership.", ephemeral=True)
+                _t(interaction, "partner.no_write_perm"), ephemeral=True)
         except discord.HTTPException as e:
-            return await interaction.followup.send(f"❌ Errore nell'invio: {e}", ephemeral=True)
+            return await interaction.followup.send(_t(interaction, "partner.send_error", error=e), ephemeral=True)
 
         # Salva la partner per poterla rimuovere se author o manager lasciano il server.
         db.add_partnership(interaction.guild_id, channel.id, [msg1.id, msg2.id],
                            interaction.user.id, self.manager.id if self.manager else None)
-        await interaction.followup.send(f"✅ Partnership pubblicata in {channel.mention}!", ephemeral=True)
+        await interaction.followup.send(_t(interaction, "partner.published", channel=channel.mention), ephemeral=True)
 
 
 class Partnership(commands.Cog):
@@ -134,10 +142,10 @@ class Partnership(commands.Cog):
         config = db.get_log_config(interaction.guild_id)
         if not feature_enabled(config, "partnership"):
             return await interaction.response.send_message(
-                "❌ La funzione **Partnership** è disattivata su questo server.", ephemeral=True)
+                _t(interaction, "partner.disabled"), ephemeral=True)
         if not can_partner(interaction.user, config):
             return await interaction.response.send_message(
-                "❌ Non hai un ruolo autorizzato a fare partnership.", ephemeral=True)
+                _t(interaction, "partner.no_role"), ephemeral=True)
         if not config.get("partnership", {}).get("channel"):
             return await interaction.response.send_message(
                 "❌ Il canale delle partnership non è configurato.\n"

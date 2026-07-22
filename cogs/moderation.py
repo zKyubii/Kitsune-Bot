@@ -5,6 +5,12 @@ import datetime
 import re
 
 import database as db
+from locales import t
+
+
+def _t(interaction, key: str, **kwargs) -> str:
+    """Scorciatoia: risolve la lingua del server dall'interaction."""
+    return t(db.get_log_config(interaction.guild_id), key, **kwargs)
 
 
 def parse_duration(duration_str: str) -> datetime.timedelta | None:
@@ -101,14 +107,15 @@ def build_mod_embed(
     durata: str = None,
     extra: dict = None,
     proof: discord.Attachment = None,
+    config: dict = None,
 ) -> discord.Embed:
     """Crea un embed di moderazione in stile pulito e coerente."""
     desc = ""
     if motivo:
-        desc += f"📋 **Reason:** {motivo}\n"
-    desc += f"👤 **Moderator:** {moderatore.mention}\n"
+        desc += f"{t(config, 'mod.embed_reason')} {motivo}\n"
+    desc += f"{t(config, 'mod.embed_moderator')} {moderatore.mention}\n"
     if durata:
-        desc += f"🕐 **Duration:** {durata}\n"
+        desc += f"{t(config, 'mod.embed_duration')} {durata}\n"
     if extra:
         for nome, valore in extra.items():
             desc += f"{nome} {valore}\n"
@@ -123,7 +130,8 @@ def build_mod_embed(
     embed.set_thumbnail(url=target.display_avatar.url)
     embed.set_footer(text=f"ID: {target.id}")
     if proof:
-        embed.add_field(name="🔗 Proof", value=f"[Allegato]({proof.url})", inline=False)
+        embed.add_field(name=t(config, "mod.embed_proof"),
+                        value=t(config, "mod.embed_attachment", url=proof.url), inline=False)
         if proof.content_type and proof.content_type.startswith("image"):
             embed.set_image(url=proof.url)
     return embed
@@ -132,18 +140,18 @@ def build_mod_embed(
 def gerarchia_ok(interaction: discord.Interaction, membro: discord.Member) -> tuple[bool, str]:
     """Controlla che sia il moderatore sia il bot possano agire sul membro."""
     if membro == interaction.user:
-        return False, "❌ Non puoi usare questo comando su te stesso."
+        return False, _t(interaction, "mod.self_target")
     if membro.id == interaction.guild.owner_id:
-        return False, "❌ Non puoi moderare il proprietario del server."
+        return False, _t(interaction, "mod.owner_target")
 
     # Il moderatore deve essere più in alto (il proprietario bypassa il controllo)
     if interaction.user.id != interaction.guild.owner_id:
         if membro.top_role >= interaction.user.top_role:
-            return False, "❌ Non puoi moderare un utente con ruolo uguale o superiore al tuo."
+            return False, _t(interaction, "mod.higher_role")
 
     # Il bot deve essere più in alto del bersaglio
     if membro.top_role >= interaction.guild.me.top_role:
-        return False, "❌ Il mio ruolo è troppo basso: spostalo sopra quello dell'utente da moderare."
+        return False, _t(interaction, "mod.bot_role_low")
 
     return True, ""
 
@@ -193,15 +201,15 @@ class Moderation(commands.Cog):
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, ModRoleMissing):
-            msg = "⛔ Non hai un ruolo autorizzato per questo comando."
+            msg = _t(interaction, "mod.no_role_perm")
         elif isinstance(error, app_commands.MissingPermissions):
             permessi = ", ".join(error.missing_permissions)
-            msg = f"⛔ Non hai il permesso necessario per questo comando: `{permessi}`"
+            msg = _t(interaction, "mod.missing_perm", perms=permessi)
         elif isinstance(error, app_commands.BotMissingPermissions):
             permessi = ", ".join(error.missing_permissions)
-            msg = f"⚠️ Mi manca il permesso necessario: `{permessi}`"
+            msg = _t(interaction, "mod.bot_missing_perm", perms=permessi)
         else:
-            msg = f"❌ Si è verificato un errore: {error}"
+            msg = _t(interaction, "mod.generic_error", error=error)
 
         if interaction.response.is_done():
             await interaction.followup.send(msg, ephemeral=True)
@@ -234,7 +242,7 @@ class Moderation(commands.Cog):
             delta = parse_duration(durata)
             if not delta:
                 await interaction.followup.send(
-                    "❌ Formato durata non valido. Usa es: `30s`, `10m`, `2h`, `7d`", ephemeral=True
+                    _t(interaction, "mod.bad_duration"), ephemeral=True
                 )
                 return
 
@@ -243,7 +251,7 @@ class Moderation(commands.Cog):
 
         extra = {}
         if purge_days > 0:
-            extra["🧹 **Purged:**"] = f"ultimi {purge_days} giorni"
+            extra[_t(interaction, "mod.embed_purged")] = _t(interaction, "mod.embed_purged_value", days=purge_days)
 
         if soft_ban:
             self._remember_mod(interaction.guild_id, "unban", membro.id, interaction.user)
@@ -251,12 +259,12 @@ class Moderation(commands.Cog):
             embed = build_mod_embed(
                 "Soft Ban", "Soft Banned", membro, interaction.user, COLORI["softban"],
                 motivo=motivo, extra=extra, proof=proof,
-            )
+             config=db.get_log_config(interaction.guild_id))
         else:
             embed = build_mod_embed(
                 "Ban", "Banned", membro, interaction.user, COLORI["ban"],
                 motivo=motivo, durata=(durata if delta else None), extra=extra, proof=proof,
-            )
+             config=db.get_log_config(interaction.guild_id))
 
         await interaction.followup.send(embed=embed)
 
@@ -284,14 +292,14 @@ class Moderation(commands.Cog):
             embed = build_mod_embed(
                 "Hack Ban", "Banned", user, interaction.user, COLORI["hackban"],
                 motivo=motivo, proof=proof,
-            )
+             config=db.get_log_config(interaction.guild_id))
             await interaction.followup.send(embed=embed)
         except ValueError:
-            await interaction.followup.send("❌ ID non valido.", ephemeral=True)
+            await interaction.followup.send(_t(interaction, "mod.bad_id"), ephemeral=True)
         except discord.NotFound:
-            await interaction.followup.send("❌ Utente non trovato.", ephemeral=True)
+            await interaction.followup.send(_t(interaction, "mod.user_not_found"), ephemeral=True)
         except Exception as e:
-            await interaction.followup.send(f"❌ Errore: {e}", ephemeral=True)
+            await interaction.followup.send(_t(interaction, "mod.error", error=e), ephemeral=True)
 
     # ── UNBAN ─────────────────────────────────────────────────────────────────
     @app_commands.command(name="unban", description="Rimuove il ban a un utente")
@@ -314,12 +322,12 @@ class Moderation(commands.Cog):
             embed = build_mod_embed(
                 "Unban", "Unbanned", user, interaction.user, COLORI["unban"],
                 motivo=motivo, proof=proof,
-            )
+             config=db.get_log_config(interaction.guild_id))
             await interaction.followup.send(embed=embed)
         except ValueError:
-            await interaction.followup.send("❌ ID non valido.", ephemeral=True)
+            await interaction.followup.send(_t(interaction, "mod.bad_id"), ephemeral=True)
         except Exception:
-            await interaction.followup.send("❌ Utente non trovato o non bannato.", ephemeral=True)
+            await interaction.followup.send(_t(interaction, "mod.user_not_banned"), ephemeral=True)
 
     # ── KICK ──────────────────────────────────────────────────────────────────
     @app_commands.command(name="kick", description="Kicka un utente dal server")
@@ -344,7 +352,7 @@ class Moderation(commands.Cog):
         embed = build_mod_embed(
             "Kick", "Kicked", membro, interaction.user, COLORI["kick"],
             motivo=motivo, proof=proof,
-        )
+         config=db.get_log_config(interaction.guild_id))
         await interaction.followup.send(embed=embed)
 
     # ── TIMEOUT ───────────────────────────────────────────────────────────────
@@ -367,13 +375,13 @@ class Moderation(commands.Cog):
         delta = parse_duration(durata)
         if not delta:
             await interaction.response.send_message(
-                "❌ Formato durata non valido. Usa es: `30s`, `10m`, `2h`, `7d`", ephemeral=True
+                _t(interaction, "mod.bad_duration"), ephemeral=True
             )
             return
 
         if delta > datetime.timedelta(days=28):
             await interaction.response.send_message(
-                "❌ Il timeout massimo consentito da Discord è **28 giorni** (`28d`).", ephemeral=True
+                _t(interaction, "mod.timeout_max"), ephemeral=True
             )
             return
 
@@ -384,7 +392,7 @@ class Moderation(commands.Cog):
         embed = build_mod_embed(
             "Timeout", "Timed out", membro, interaction.user, COLORI["timeout"],
             motivo=motivo, durata=durata, proof=proof,
-        )
+         config=db.get_log_config(interaction.guild_id))
         await interaction.followup.send(embed=embed)
 
     # ── UNTIMEOUT ─────────────────────────────────────────────────────────────
@@ -396,7 +404,7 @@ class Moderation(commands.Cog):
         await membro.timeout(None)
         embed = build_mod_embed(
             "Untimeout", "Timeout removed", membro, interaction.user, COLORI["untimeout"],
-        )
+         config=db.get_log_config(interaction.guild_id))
         await interaction.response.send_message(embed=embed)
 
     # ── SLOWMODE ──────────────────────────────────────────────────────────────
@@ -423,7 +431,7 @@ class Moderation(commands.Cog):
     ):
         if preset is None and personalizzato is None:
             await interaction.response.send_message(
-                "❌ Scegli un preset oppure inserisci un valore personalizzato in secondi.", ephemeral=True
+                _t(interaction, "mod.slowmode_need_value"), ephemeral=True
             )
             return
 
@@ -431,9 +439,9 @@ class Moderation(commands.Cog):
         await interaction.channel.edit(slowmode_delay=secondi)
 
         if secondi == 0:
-            await interaction.response.send_message("✅ Slowmode disattivato.")
+            await interaction.response.send_message(_t(interaction, "mod.slowmode_off"))
         else:
-            await interaction.response.send_message(f"🐢 Slowmode impostato a **{format_seconds(secondi)}**.")
+            await interaction.response.send_message(_t(interaction, "mod.slowmode_set", value=format_seconds(secondi)))
 
     # ── CLEAR ─────────────────────────────────────────────────────────────────
     @app_commands.command(name="clear", description="Cancella messaggi dal canale con filtri opzionali")
@@ -468,7 +476,7 @@ class Moderation(commands.Cog):
             return True
 
         eliminati = await interaction.channel.purge(limit=quantita, check=check)
-        await interaction.followup.send(f"🗑️ Eliminati **{len(eliminati)}** messaggi.", ephemeral=True)
+        await interaction.followup.send(_t(interaction, "mod.cleared", n=len(eliminati)), ephemeral=True)
 
 
     # ── BANLIST ───────────────────────────────────────────────────────────────
@@ -481,7 +489,7 @@ class Moderation(commands.Cog):
         bans = [entry async for entry in interaction.guild.bans()]
 
         if not bans:
-            await interaction.followup.send("✅ Non ci sono utenti bannati in questo server.", ephemeral=True)
+            await interaction.followup.send(_t(interaction, "mod.no_bans"), ephemeral=True)
             return
 
         view = BanlistView(bans, interaction.user.id)
@@ -499,10 +507,10 @@ class Moderation(commands.Cog):
         proof: discord.Attachment = None,
     ):
         if membro == interaction.user:
-            await interaction.response.send_message("❌ Non puoi avvisare te stesso.", ephemeral=True)
+            await interaction.response.send_message(_t(interaction, "mod.warn_self"), ephemeral=True)
             return
         if membro.bot:
-            await interaction.response.send_message("❌ Non puoi avvisare un bot.", ephemeral=True)
+            await interaction.response.send_message(_t(interaction, "mod.warn_bot"), ephemeral=True)
             return
 
         proof_url = proof.url if proof else None
@@ -534,7 +542,7 @@ class Moderation(commands.Cog):
         # Avvisa l'utente in DM (se possibile)
         try:
             dm = discord.Embed(
-                title=f"⚠️ Sei stato avvisato in {interaction.guild.name}",
+                title=_t(interaction, "mod.warn_dm_title", guild=interaction.guild.name),
                 description=f"📋 **Motivo:** {motivo}",
                 color=0xF1C40F,
             )
@@ -550,11 +558,11 @@ class Moderation(commands.Cog):
         warns = db.get_warnings(interaction.guild_id, membro.id)
         if not warns:
             await interaction.response.send_message(
-                f"✅ **{membro}** non ha warn.", ephemeral=True)
+                _t(interaction, "mod.no_warns", user=membro), ephemeral=True)
             return
 
         embed = discord.Embed(
-            title=f"⚠️ Warn di {membro}",
+            title=_t(interaction, "mod.warns_title", user=membro),
             description=f"Totale: **{len(warns)}**",
             color=0xF1C40F,
         )
@@ -573,9 +581,9 @@ class Moderation(commands.Cog):
     @mod_check("warn")
     async def delwarn(self, interaction: discord.Interaction, warn_id: int):
         if db.remove_warning(interaction.guild_id, warn_id):
-            await interaction.response.send_message(f"✅ Warn **#{warn_id}** rimosso.")
+            await interaction.response.send_message(_t(interaction, "mod.warn_removed", id=warn_id))
         else:
-            await interaction.response.send_message(f"❌ Nessun warn con ID #{warn_id}.", ephemeral=True)
+            await interaction.response.send_message(_t(interaction, "mod.warn_not_found", id=warn_id), ephemeral=True)
 
     # ── CLEARWARNS ────────────────────────────────────────────────────────────
     @app_commands.command(name="clearwarns", description="Cancella tutti i warn di un utente")
@@ -588,7 +596,7 @@ class Moderation(commands.Cog):
                 f"🧹 Rimossi **{quanti}** warn da **{membro}**.")
         else:
             await interaction.response.send_message(
-                f"✅ **{membro}** non aveva warn.", ephemeral=True)
+                _t(interaction, "mod.had_no_warns", user=membro), ephemeral=True)
 
     async def _applica_auto_warn(self, guild: discord.Guild, membro: discord.Member, totale: int):
         """Applica l'azione automatica se esiste una regola per questo numero di warn."""
@@ -671,7 +679,7 @@ class Moderation(commands.Cog):
 
         if not role or not channel:
             await interaction.response.send_message(
-                "❌ Il sistema Jail non è configurato. Vai su `/dashboard` → 🛡️ Moderazione → 🔒 Jail → **Setup**.",
+                _t(interaction, "mod.jail_not_configured"),
                 ephemeral=True)
             return
 
@@ -680,7 +688,7 @@ class Moderation(commands.Cog):
             await interaction.response.send_message(errore, ephemeral=True)
             return
         if role in membro.roles:
-            await interaction.response.send_message(f"❌ **{membro}** è già in jail.", ephemeral=True)
+            await interaction.response.send_message(_t(interaction, "mod.already_jailed", user=membro), ephemeral=True)
             return
 
         await interaction.response.defer()
@@ -693,7 +701,7 @@ class Moderation(commands.Cog):
                 await membro.remove_roles(*da_rimuovere, reason=f"Jail: {motivo}")
             await membro.add_roles(role, reason=f"Jail: {motivo}")
         except discord.HTTPException as e:
-            await interaction.followup.send(f"❌ Errore: {e}", ephemeral=True)
+            await interaction.followup.send(_t(interaction, "mod.error", error=e), ephemeral=True)
             return
 
         embed = discord.Embed(title="🔒 Utente in Jail", color=COLORI.get("ban", 0xE74C3C),
@@ -720,7 +728,7 @@ class Moderation(commands.Cog):
         config = db.get_log_config(interaction.guild_id)
         role = interaction.guild.get_role(config.get("jail", {}).get("role"))
         if not role or role not in membro.roles:
-            await interaction.response.send_message(f"❌ **{membro}** non è in jail.", ephemeral=True)
+            await interaction.response.send_message(_t(interaction, "mod.not_jailed", user=membro), ephemeral=True)
             return
 
         await interaction.response.defer()
@@ -733,7 +741,7 @@ class Moderation(commands.Cog):
             if ruoli:
                 await membro.add_roles(*ruoli, reason="Unjail: ripristino ruoli")
         except discord.HTTPException as e:
-            await interaction.followup.send(f"❌ Errore: {e}", ephemeral=True)
+            await interaction.followup.send(_t(interaction, "mod.error", error=e), ephemeral=True)
             return
 
         db.remove_jailed(interaction.guild_id, membro.id)
@@ -772,7 +780,7 @@ class Moderation(commands.Cog):
 
         membri = role.members
         if not membri:
-            await interaction.response.send_message("✅ Nessun utente è attualmente in jail.", ephemeral=True)
+            await interaction.response.send_message(_t(interaction, "mod.no_jailed"), ephemeral=True)
             return
 
         righe = [f"🔒 {m.mention} (`{m.id}`)" for m in membri]
@@ -914,7 +922,7 @@ class BanlistView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.autore_id:
-            await interaction.response.send_message("❌ Solo chi ha usato il comando può sfogliare.", ephemeral=True)
+            await interaction.response.send_message(_t(interaction, "mod.only_author"), ephemeral=True)
             return False
         return True
 

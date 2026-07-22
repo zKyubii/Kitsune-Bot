@@ -69,7 +69,7 @@ class Avatar(commands.Cog):
             asset = user.banner
             titolo = "Banner"
         if asset is None:
-            await ctx.send(f"❌ {target.display_name} non ha un banner.")
+            await ctx.send(_t(ctx, "avatar.no_banner", user=target.display_name))
             return
         await ctx.send(embed=self._embed(target, titolo, asset))
 
@@ -82,7 +82,7 @@ class Avatar(commands.Cog):
             return
         user = await self.bot.fetch_user(target.id)
         if user.banner is None:
-            await ctx.send(f"❌ {target.display_name} non ha un banner sul profilo.")
+            await ctx.send(_t(ctx, "avatar.no_profile_banner", user=target.display_name))
             return
         await ctx.send(embed=self._embed(user, "Banner", user.banner))
 

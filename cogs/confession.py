@@ -4,23 +4,33 @@ from discord import app_commands
 import datetime
 
 import database as db
+from locales import t
+
+
+def _t(ctx_or_inter, key: str, **kwargs) -> str:
+    """Scorciatoia: risolve la lingua del server da ctx o interaction."""
+    gid = getattr(ctx_or_inter, "guild_id", None) or ctx_or_inter.guild.id
+    return t(db.get_log_config(gid), key, **kwargs)
+
 import logconfig
 
 GIALLO = 0xFCD34D
 
 
-class ConfessionModal(discord.ui.Modal, title="Confessione anonima"):
-    testo = discord.ui.TextInput(
-        label="La tua confessione",
-        style=discord.TextStyle.paragraph,
-        placeholder="Scrivi qui... resterà anonima 🤫",
-        max_length=1000,
-        required=True,
-    )
-
-    def __init__(self, cog):
-        super().__init__()
+class ConfessionModal(discord.ui.Modal):
+    def __init__(self, cog, config=None):
+        # Il campo si costruisce qui (non a livello di classe) così etichetta e
+        # placeholder possono seguire la lingua del server.
+        super().__init__(title=t(config, "conf.modal_title"))
         self.cog = cog
+        self.testo = discord.ui.TextInput(
+            label=t(config, "conf.modal_label"),
+            style=discord.TextStyle.paragraph,
+            placeholder=t(config, "conf.placeholder"),
+            max_length=1000,
+            required=True,
+        )
+        self.add_item(self.testo)
 
     async def on_submit(self, interaction: discord.Interaction):
         await self.cog.pubblica_confessione(interaction, self.testo.value)
@@ -37,13 +47,13 @@ class ConfessionPromptView(discord.ui.View):
     async def nuova(self, interaction: discord.Interaction, button: discord.ui.Button):
         config = db.get_log_config(interaction.guild_id)
         if not logconfig.feature_enabled(config, "confession"):
-            await interaction.response.send_message("🚫 Le confessioni sono disattivate.", ephemeral=True)
+            await interaction.response.send_message(_t(interaction, "conf.disabled_short"), ephemeral=True)
             return
         cfg = db.get_config(interaction.guild_id)
         if not cfg or not cfg["confession_channel"]:
-            await interaction.response.send_message("❌ Le confessioni non sono configurate.", ephemeral=True)
+            await interaction.response.send_message(_t(interaction, "conf.not_configured"), ephemeral=True)
             return
-        await interaction.response.send_modal(ConfessionModal(self.cog))
+        await interaction.response.send_modal(ConfessionModal(self.cog, db.get_log_config(interaction.guild_id)))
 
 
 class Confession(commands.Cog):
@@ -55,11 +65,11 @@ class Confession(commands.Cog):
 
     async def cog_app_command_error(self, interaction, error):
         if isinstance(error, logconfig.FeatureDisabled):
-            msg = "🚫 Le confessioni sono disattivate su questo server."
+            msg = _t(interaction, "conf.disabled")
         elif isinstance(error, app_commands.MissingPermissions):
-            msg = "⛔ Non hai il permesso necessario per questo comando."
+            msg = _t(interaction, "conf.no_perm")
         else:
-            msg = f"❌ Errore: {error}"
+            msg = _t(interaction, "mod.error", error=error)
         if interaction.response.is_done():
             await interaction.followup.send(msg, ephemeral=True)
         else:
@@ -71,11 +81,11 @@ class Confession(commands.Cog):
         config = db.get_config(interaction.guild_id)
         if not config or not config["confession_channel"]:
             await interaction.response.send_message(
-                "❌ Le confessioni non sono configurate. Un admin deve impostarle da `/dashboard` → 🔧 Funzioni → Confession.",
+                _t(interaction, "conf.not_configured_admin"),
                 ephemeral=True,
             )
             return
-        await interaction.response.send_modal(ConfessionModal(self))
+        await interaction.response.send_modal(ConfessionModal(self, db.get_log_config(interaction.guild_id)))
 
     async def _log(self, guild, numero, testo, autore):
         config = db.get_config(guild.id)
@@ -103,7 +113,7 @@ class Confession(commands.Cog):
         canale = guild.get_channel(config["confession_channel"]) if config else None
         if canale is None:
             await interaction.response.send_message(
-                "❌ Il canale delle confessioni non esiste più.", ephemeral=True)
+                _t(interaction, "conf.channel_gone"), ephemeral=True)
             return
 
         numero = db.next_confession_number(guild.id)
@@ -129,7 +139,7 @@ class Confession(commands.Cog):
         db.save_confession(guild.id, numero, interaction.user.id, msg.id, testo, None)
         await self._log(guild, numero, testo, interaction.user)
         await interaction.response.send_message(
-            f"✅ La tua confessione **#{numero}** è stata pubblicata in {canale.mention}!", ephemeral=True)
+            _t(interaction, "conf.published", n=numero, channel=canale.mention), ephemeral=True)
 
 
 async def setup(bot):

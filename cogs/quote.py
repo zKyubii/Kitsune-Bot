@@ -6,6 +6,14 @@ import asyncio
 from PIL import Image, ImageDraw, ImageFont
 
 import database as db
+from locales import t
+
+
+def _t(ctx_or_inter, key: str, **kwargs) -> str:
+    """Scorciatoia: risolve la lingua del server da ctx o interaction."""
+    gid = getattr(ctx_or_inter, "guild_id", None) or ctx_or_inter.guild.id
+    return t(db.get_log_config(gid), key, **kwargs)
+
 import logconfig
 from cogs.fun import _segmenta, _render_emoji
 from cogs.profile import privacy_blocked, privacy_notify
@@ -268,7 +276,7 @@ class QuoteView(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.autore_id:
             await interaction.response.send_message(
-                "❌ Solo chi ha creato la quote può modificarla.", ephemeral=True
+                _t(interaction, "quote.only_author"), ephemeral=True
             )
             return False
         return True
@@ -317,11 +325,11 @@ class Quote(commands.Cog):
         config = db.get_log_config(interaction.guild_id)
         if not logconfig.feature_enabled(config, "quote"):
             await interaction.response.send_message(
-                "🚫 La funzione Quote è disattivata su questo server.", ephemeral=True)
+                _t(interaction, "quote.disabled"), ephemeral=True)
             return
         if not message.content:
             await interaction.response.send_message(
-                "❌ Questo messaggio non ha testo da citare.", ephemeral=True)
+                _t(interaction, "quote.no_text"), ephemeral=True)
             return
         if privacy_blocked(interaction.guild, interaction.user, message.author, "quote"):
             await interaction.response.send_message(
@@ -332,7 +340,7 @@ class Quote(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         dest = await self._pubblica(interaction.guild, interaction.channel, message, interaction.user.id)
         await interaction.followup.send(
-            f"✅ Quote creata in {dest.mention}! Personalizzala con i bottoni sul messaggio.",
+            _t(interaction, "quote.created", channel=dest.mention),
             ephemeral=True,
         )
 
@@ -355,7 +363,7 @@ class Quote(commands.Cog):
             except (discord.NotFound, discord.HTTPException):
                 return
         if not ref.content:
-            await message.channel.send("❌ Quel messaggio non ha testo da citare.", delete_after=5)
+            await message.channel.send(_t(message, "quote.no_text_short"), delete_after=5)
             return
         if privacy_blocked(message.guild, message.author, ref.author, "quote"):
             if privacy_notify(ref.author):

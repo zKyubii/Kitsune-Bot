@@ -131,10 +131,13 @@ class Counting(commands.Cog):
         # invece di ripetere lo stesso numero due volte.
         riga_record = (t(config, "counting.record_new", record=record) if raggiunto >= record
                        else t(config, "counting.record_current", record=record))
+        # Rispondiamo AL messaggio sbagliato, così si vede subito qual è stato.
+        # mention_author=False: il tag è già nel testo, non serve pingare due volte.
         try:
-            await message.channel.send(
+            await message.reply(
                 t(config, "counting.ruined", user=message.author.mention,
-                  n=raggiunto, reason=motivo, record=riga_record)
+                  n=raggiunto, reason=motivo, record=riga_record),
+                mention_author=False,
             )
         except discord.HTTPException:
             pass
