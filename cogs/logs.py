@@ -5,6 +5,7 @@ import io
 
 import database as db
 import logconfig
+from locales import t
 
 # Color palette
 GREEN = 0x2ECC71
@@ -288,7 +289,7 @@ class Logs(commands.Cog):
                 if actor and actor.id != after.id:
                     rest = [f"**Removed by:** {actor.mention}"]
                 else:
-                    rest = ["*Scaduto automaticamente*"]
+                    rest = [t(db.get_log_config(guild.id), "logs.timeout_expired")]
                 e = _emb(GREEN, "✅ Timeout Removed", after.mention, rest, user=after)
             await self._send(guild, "modlogs", "timeout", e, copy_id=after.id)
 

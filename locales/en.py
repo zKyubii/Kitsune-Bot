@@ -109,6 +109,47 @@ STRINGS = {
     "partner.disabled": "❌ The **Partnership** feature is disabled on this server.",
     "partner.no_role": "❌ You don't have a role authorised to make partnerships.",
 
+    # ── FUN (ship / marriage) ───────────────────────────────────────────────
+    "fun.disabled": "🚫 This feature isn't available on this server right now.",
+    "fun.only_target": "❌ Only the person who was asked can accept.",
+    "fun.self_marry": "💍 You can't marry yourself! Self-esteem matters, "
+                      "but you need someone else 😅",
+    "fun.married": "💍 {a} and {b} got married for **24 hours**! 🎉💕",
+    "fun.timeout": "⏳ {user} didn't accept in time.",
+    "fun.proposal": "{partner}, **{proposer}** wants to marry you! 💍\n",
+    "fun.single": "💔 {user} is currently single.",
+    "fun.marriage_title": "💍 Marriage",
+    "fun.marriage_couple": "Couple",
+    "fun.marriage_expires": "Expires",
+    # /ship lines, one per row — {a} and {b} are the two users
+    "fun.ship_t0": "Ouch, the stars say run 🏃💨 {a} and {b} just no.\n"
+                   "Sorry {a}, but {b} isn't for you 💀\n"
+                   "Zero sparks between {a} and {b}... better stay friends 🙈\n"
+                   "Let's say {a} and {b} have very different tastes 😬",
+    "fun.ship_t1": "There's hope for {a} and {b}, keep trying 💪\n"
+                   "There's something between {a} and {b}, but it needs work 🤏\n"
+                   "With a small miracle, {a} could win {b} over ✨\n"
+                   "Not bad {a}... give {b} a chance 🤔",
+    "fun.ship_t2": "Halfway there: {a} and {b}, who knows how it ends 💗\n"
+                   "You can definitely see some sparks between {a} and {b} 👀\n"
+                   "Careful, something might grow between {a} and {b} 🙂\n"
+                   "Neither hot nor cold, but {a} and {b} have potential 🔥",
+    "fun.ship_t3": "Love is in the air for {a} and {b} 🌸\n"
+                   "Great chemistry! {a} and {b} are almost there 💕\n"
+                   "Let's be honest, {a} and {b} are cute together 🥰\n"
+                   "Heart eyes: {a} and {b} make a lovely couple 💘",
+    "fun.ship_t4": "How are you two not married yet, {a} and {b}? 💍\n"
+                   "They look made for each other: {a} and {b} 💞\n"
+                   "Soulmates, {a} and {b} 🫶\n"
+                   "A fairytale couple: {a} and {b} 🏰",
+    "fun.ship_t5": "Wedding incoming for {a} and {b}! 💍🔥\n"
+                   "The universe brought {a} and {b} together, it's destiny ❤️🌌\n"
+                   "Eternal love written in the stars for {a} and {b} ⭐\n"
+                   "Inseparable forever: {a} and {b} ♾️",
+
+    # ── LOGS ────────────────────────────────────────────────────────────────
+    "logs.timeout_expired": "*Expired automatically*",
+
     # ── MINIGAMES ───────────────────────────────────────────────────────────
     "mg.disabled": "🚫 Minigames aren't available on this server right now.",
     "mg.coin_heads": "Heads 🪙",

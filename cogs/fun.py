@@ -11,6 +11,13 @@ import aiohttp
 from PIL import Image, ImageDraw, ImageFont
 
 import database as db
+from locales import t, tlist
+
+
+def _t(ctx_or_inter, key: str, **kwargs) -> str:
+    gid = getattr(ctx_or_inter, "guild_id", None) or ctx_or_inter.guild.id
+    return t(db.get_log_config(gid), key, **kwargs)
+
 import logconfig
 
 ROSA = (255, 140, 200)
@@ -464,7 +471,7 @@ class PairConfirmView(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.partner.id:
             await interaction.response.send_message(
-                "❌ Solo la persona richiesta può accettare.", ephemeral=True)
+                _t(interaction, "fun.only_target"), ephemeral=True)
             return False
         return True
 
@@ -475,7 +482,7 @@ class PairConfirmView(discord.ui.View):
             it.disabled = True
         self.stop()
         await interaction.response.edit_message(
-            content=f"💍 {self.proponente.mention} e {self.partner.mention} si sono sposati per **24 ore**! 🎉💕",
+            content=t(db.get_log_config(self.guild_id), "fun.married", a=self.proponente.mention, b=self.partner.mention),
             view=self)
 
     async def on_timeout(self):
@@ -484,7 +491,7 @@ class PairConfirmView(discord.ui.View):
                 it.disabled = True
             try:
                 await self.message.edit(
-                    content=f"⏳ {self.partner.mention} non ha accettato in tempo.",
+                    content=t(db.get_log_config(self.guild_id), "fun.timeout", user=self.partner.mention),
                     view=self)
             except (discord.HTTPException, discord.NotFound):
                 pass
@@ -530,7 +537,7 @@ class Fun(commands.Cog):
         if ctx.guild is None:
             return False
         if not logconfig.feature_enabled(db.get_log_config(ctx.guild.id), "fun"):
-            await ctx.send("🚫 Questa funzione non è disponibile al momento su questo server.")
+            await ctx.send(_t(ctx, "fun.disabled"))
             return False
         return True
 
@@ -549,48 +556,11 @@ class Fun(commands.Cog):
         perc = round(rng.uniform(0, 100), 1)
 
         # Frasi varie: i nomi non sono sempre all'inizio. {a} e {b} = i due utenti
-        if perc < 20:
-            frasi = [
-                "Ahia, le stelle dicono di scappare 🏃💨 {a} e {b} proprio no.",
-                "Mi dispiace {a}, ma {b} non fa per te 💀",
-                "Zero scintille tra {a} e {b}... meglio restare amici 🙈",
-                "Diciamo che {a} e {b} hanno gusti molto diversi 😬",
-            ]
-        elif perc < 40:
-            frasi = [
-                "C'è speranza per {a} e {b}, continuate a provarci 💪",
-                "Qualcosina tra {a} e {b} c'è, ma serve lavorarci 🤏",
-                "Con un piccolo miracolo, {a} potrebbe conquistare {b} ✨",
-                "Non malissimo {a}... dai una chance a {b} 🤔",
-            ]
-        elif perc < 60:
-            frasi = [
-                "A metà strada: {a} e {b}, chi lo sa come va a finire 💗",
-                "Qualche scintilla tra {a} e {b} si vede eccome 👀",
-                "Occhio, tra {a} e {b} potrebbe nascere qualcosa 🙂",
-                "Né caldo né freddo, ma {a} e {b} hanno del potenziale 🔥",
-            ]
-        elif perc < 80:
-            frasi = [
-                "L'amore è nell'aria per {a} e {b} 🌸",
-                "Bella intesa! {a} e {b} ci siamo quasi 💕",
-                "Diciamocelo, {a} e {b} sono carini insieme 🥰",
-                "Occhi a cuore: {a} e {b} fanno una bella coppia 💘",
-            ]
-        elif perc < 95:
-            frasi = [
-                "Ma come fate a non esservi ancora sposati, {a} e {b}? 💍",
-                "Sembrano fatti l'uno per l'altro: {a} e {b} 💞",
-                "Anime gemelle, {a} e {b} 🫶",
-                "Una coppia da favola: {a} e {b} 🏰",
-            ]
-        else:
-            frasi = [
-                "Matrimonio in vista per {a} e {b}! 💍🔥",
-                "L'universo ha unito {a} e {b}, è destino ❤️🌌",
-                "Amore eterno scritto nelle stelle per {a} e {b} ⭐",
-                "Inseparabili per sempre: {a} e {b} ♾️",
-            ]
+        cfg_ship = db.get_log_config(ctx.guild.id)
+        tier = ("fun.ship_t0" if perc < 20 else "fun.ship_t1" if perc < 40 else
+                "fun.ship_t2" if perc < 60 else "fun.ship_t3" if perc < 80 else
+                "fun.ship_t4" if perc < 95 else "fun.ship_t5")
+        frasi = tlist(cfg_ship, tier)
         commento = random.choice(frasi).format(a=utente1.mention, b=utente2.mention)
 
         # Genera l'immagine (in un thread per non bloccare il bot)
@@ -613,15 +583,15 @@ class Fun(commands.Cog):
         m = db.get_marriage(ctx.guild.id, target.id)
 
         if not m:
-            await ctx.send(f"💔 {target.mention} al momento è single.")
+            await ctx.send(_t(ctx, "fun.single", user=target.mention))
             return
 
         scadenza = datetime.datetime.fromisoformat(m["expires_at"])
         quando = discord.utils.format_dt(scadenza, style="R")
 
-        embed = discord.Embed(title="💍 Matrimonio", color=0xFF6B9D)
-        embed.add_field(name="Coppia", value=f"<@{m['user1']}> 💞 <@{m['user2']}>", inline=False)
-        embed.add_field(name="Scade", value=quando, inline=False)
+        embed = discord.Embed(title=_t(ctx, "fun.marriage_title"), color=0xFF6B9D)
+        embed.add_field(name=_t(ctx, "fun.marriage_couple"), value=f"<@{m['user1']}> 💞 <@{m['user2']}>", inline=False)
+        embed.add_field(name=_t(ctx, "fun.marriage_expires"), value=quando, inline=False)
         embed.set_footer(text="I matrimoni durano 24 ore")
         await ctx.send(embed=embed)
 

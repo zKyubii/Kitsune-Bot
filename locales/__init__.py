@@ -46,3 +46,14 @@ def t(config, key: str, **kwargs) -> str:
         return testo.format(**kwargs)
     except (KeyError, IndexError, ValueError):
         return testo
+
+
+def tlist(config, key: str) -> list:
+    """Righe di una chiave multi-valore (es. frasi random), NON formattate.
+
+    Serve quando il testo contiene segnaposto da riempire dopo la scelta
+    casuale (come `{a}` e `{b}` nelle frasi di /ship).
+    """
+    lingua = config if isinstance(config, str) else lang_of(config)
+    testo = LANGS.get(lingua, {}).get(key) or LANGS[DEFAULT_LANG].get(key, "")
+    return [r for r in testo.split("\n") if r]

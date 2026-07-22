@@ -109,6 +109,47 @@ STRINGS = {
     "partner.disabled": "❌ La funzione **Partnership** è disattivata su questo server.",
     "partner.no_role": "❌ Non hai un ruolo autorizzato a fare partnership.",
 
+    # ── FUN (ship / matrimonio) ─────────────────────────────────────────────
+    "fun.disabled": "🚫 Questa funzione non è disponibile al momento su questo server.",
+    "fun.only_target": "❌ Solo la persona richiesta può accettare.",
+    "fun.self_marry": "💍 Non puoi sposare te stesso! L'autostima è importante, "
+                      "ma serve qualcun altro 😅",
+    "fun.married": "💍 {a} e {b} si sono sposati per **24 ore**! 🎉💕",
+    "fun.timeout": "⏳ {user} non ha accettato in tempo.",
+    "fun.proposal": "{partner}, **{proposer}** vuole sposarti! 💍\n",
+    "fun.single": "💔 {user} al momento è single.",
+    "fun.marriage_title": "💍 Matrimonio",
+    "fun.marriage_couple": "Coppia",
+    "fun.marriage_expires": "Scade",
+    # frasi di /ship, una per riga — {a} e {b} sono i due utenti
+    "fun.ship_t0": "Ahia, le stelle dicono di scappare 🏃💨 {a} e {b} proprio no.\n"
+                   "Mi dispiace {a}, ma {b} non fa per te 💀\n"
+                   "Zero scintille tra {a} e {b}... meglio restare amici 🙈\n"
+                   "Diciamo che {a} e {b} hanno gusti molto diversi 😬",
+    "fun.ship_t1": "C'è speranza per {a} e {b}, continuate a provarci 💪\n"
+                   "Qualcosina tra {a} e {b} c'è, ma serve lavorarci 🤏\n"
+                   "Con un piccolo miracolo, {a} potrebbe conquistare {b} ✨\n"
+                   "Non malissimo {a}... dai una chance a {b} 🤔",
+    "fun.ship_t2": "A metà strada: {a} e {b}, chi lo sa come va a finire 💗\n"
+                   "Qualche scintilla tra {a} e {b} si vede eccome 👀\n"
+                   "Occhio, tra {a} e {b} potrebbe nascere qualcosa 🙂\n"
+                   "Né caldo né freddo, ma {a} e {b} hanno del potenziale 🔥",
+    "fun.ship_t3": "L'amore è nell'aria per {a} e {b} 🌸\n"
+                   "Bella intesa! {a} e {b} ci siamo quasi 💕\n"
+                   "Diciamocelo, {a} e {b} sono carini insieme 🥰\n"
+                   "Occhi a cuore: {a} e {b} fanno una bella coppia 💘",
+    "fun.ship_t4": "Ma come fate a non esservi ancora sposati, {a} e {b}? 💍\n"
+                   "Sembrano fatti l'uno per l'altro: {a} e {b} 💞\n"
+                   "Anime gemelle, {a} e {b} 🫶\n"
+                   "Una coppia da favola: {a} e {b} 🏰",
+    "fun.ship_t5": "Matrimonio in vista per {a} e {b}! 💍🔥\n"
+                   "L'universo ha unito {a} e {b}, è destino ❤️🌌\n"
+                   "Amore eterno scritto nelle stelle per {a} e {b} ⭐\n"
+                   "Inseparabili per sempre: {a} e {b} ♾️",
+
+    # ── LOG ─────────────────────────────────────────────────────────────────
+    "logs.timeout_expired": "*Scaduto automaticamente*",
+
     # ── MINIGIOCHI ──────────────────────────────────────────────────────────
     "mg.disabled": "🚫 I minigiochi non sono disponibili al momento su questo server.",
     "mg.coin_heads": "Testa 🪙",
