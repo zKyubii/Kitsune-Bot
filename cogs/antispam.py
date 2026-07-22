@@ -6,6 +6,7 @@ import collections
 
 import database as db
 import logconfig
+from locales import t
 
 # Finestre temporali (secondi)
 WINDOW = 8            # finestra per il conteggio messaggi
@@ -144,9 +145,9 @@ class Antispam(commands.Cog):
         ok = True
         if sanction != "none":
             ok = await self._sanziona(message.guild, message.author, sanction, cat["seconds"],
-                                      f"Antispam: {logconfig.SPAM_CATEGORIES[categoria]}")
+                                      "Antispam: " + t(config, logconfig.SPAM_CATEGORIES[categoria]))
 
-        await self._segnala(message, f"🚨 {logconfig.SPAM_CATEGORIES[categoria]}",
+        await self._segnala(message, "🚨 " + t(config, logconfig.SPAM_CATEGORIES[categoria]),
                             sanction if ok else "nessuna (errore)", cat.get("seconds", 0))
 
     def _rileva(self, key, record):
@@ -183,7 +184,7 @@ class Antispam(commands.Cog):
                               timestamp=datetime.datetime.now(datetime.timezone.utc))
         embed.add_field(name="Utente", value=f"{message.author.mention} (`{message.author.id}`)", inline=False)
         embed.add_field(name="Canale", value=message.channel.mention, inline=True)
-        sanz = logconfig.SANCTIONS.get(sanzione, sanzione)
+        sanz = t(config, logconfig.SANCTIONS.get(sanzione, sanzione))
         if sanzione == "timeout" and seconds:
             sanz += f" ({seconds // 60} min)" if seconds >= 60 else f" ({seconds}s)"
         embed.add_field(name="Sanzione", value=sanz, inline=True)

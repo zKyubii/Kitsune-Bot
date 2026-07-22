@@ -96,12 +96,12 @@ class HomeSelect(discord.ui.Select):
 
 
 class LogCategorySelect(discord.ui.Select):
-    def __init__(self):
+    def __init__(self, config=None):
         options = [
-            discord.SelectOption(label=label, value=key)
+            discord.SelectOption(label=t(config, label), value=key)
             for key, (label, _) in LOG_CATEGORIES.items()
         ]
-        super().__init__(placeholder="📋 Scegli una categoria di log...", options=options)
+        super().__init__(placeholder=t(config, "dash.log_cat_placeholder"), options=options)
 
     async def callback(self, interaction: discord.Interaction):
         view = CategoryView(self.view.author_id, self.view.guild, self.values[0])
@@ -387,7 +387,7 @@ class LogBlacklistView(BaseView):
 class LogsMenuView(BaseView):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(author_id, guild)
-        self.add_item(LogCategorySelect())
+        self.add_item(LogCategorySelect(db.get_log_config(guild.id)))
         self.add_item(OpenLogBlacklistButton())
         self.add_item(BackButton("home"))
 
@@ -922,8 +922,8 @@ class WhitelistView(BaseView):
 
 # ── CATEGORIE & SANZIONI ──────────────────────────────────────────────────────
 class SpamCategorySelect(discord.ui.Select):
-    def __init__(self):
-        options = [discord.SelectOption(label=lab, value=k) for k, lab in SPAM_CATEGORIES.items()]
+    def __init__(self, config=None):
+        options = [discord.SelectOption(label=t(config, lab), value=k) for k, lab in SPAM_CATEGORIES.items()]
         super().__init__(placeholder="Scegli una categoria da configurare...", options=options, row=0)
 
     async def callback(self, interaction: discord.Interaction):
@@ -934,7 +934,7 @@ class SpamCategorySelect(discord.ui.Select):
 class SpamCategoriesView(BaseView):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(author_id, guild)
-        self.add_item(SpamCategorySelect())
+        self.add_item(SpamCategorySelect(db.get_log_config(guild.id)))
         self.add_item(BackButton("antispam"))
 
     def build_embed(self) -> discord.Embed:
@@ -943,10 +943,10 @@ class SpamCategoriesView(BaseView):
         for k, lab in SPAM_CATEGORIES.items():
             c = categoria_cfg(config, k)
             stato = "🟢" if c["enabled"] else "🔴"
-            sanz = SANCTIONS.get(c["sanction"], c["sanction"])
+            sanz = t(config, SANCTIONS.get(c["sanction"], c["sanction"]))
             if c["sanction"] == "timeout" and c["seconds"]:
                 sanz += f" {c['seconds'] // 60}min"
-            righe.append(f"{stato} **{lab}** → {sanz}")
+            righe.append(f"{stato} **{t(config, lab)}** → {sanz}")
         embed = discord.Embed(title="⚙️ Categorie & Sanzioni", color=BLU,
                               description="\n".join(righe))
         embed.set_footer(text="Scegli una categoria per modificarla")
@@ -970,9 +970,9 @@ class ToggleCategoryButton(discord.ui.Button):
 
 
 class SanctionSelect(discord.ui.Select):
-    def __init__(self, category, corrente):
+    def __init__(self, category, corrente, config=None):
         self.category = category
-        options = [discord.SelectOption(label=lab, value=k, default=(k == corrente))
+        options = [discord.SelectOption(label=t(config, lab), value=k, default=(k == corrente))
                    for k, lab in SANCTIONS.items()]
         super().__init__(placeholder="Sanzione...", options=options, row=0)
 
@@ -1007,15 +1007,16 @@ class SpamCategoryConfigView(BaseView):
         super().__init__(author_id, guild)
         self.category = category
         c = categoria_cfg(db.get_log_config(guild.id), category)
-        self.add_item(SanctionSelect(category, c["sanction"]))
+        self.add_item(SanctionSelect(category, c["sanction"], db.get_log_config(guild.id)))
         self.add_item(SanctionDurationSelect(category, c.get("seconds", 600)))
         self.add_item(ToggleCategoryButton(category, c["enabled"]))
         self.add_item(BackButton("categories"))
 
     def build_embed(self) -> discord.Embed:
-        c = categoria_cfg(db.get_log_config(self.guild.id), self.category)
-        sanz = SANCTIONS.get(c["sanction"], c["sanction"])
-        embed = discord.Embed(title=f"⚙️ {SPAM_CATEGORIES[self.category]}", color=BLU)
+        config = db.get_log_config(self.guild.id)
+        c = categoria_cfg(config, self.category)
+        sanz = t(config, SANCTIONS.get(c["sanction"], c["sanction"]))
+        embed = discord.Embed(title="⚙️ " + t(config, SPAM_CATEGORIES[self.category]), color=BLU)
         embed.add_field(name="Stato", value="🟢 Attiva" if c["enabled"] else "🔴 Disattiva", inline=True)
         embed.add_field(name="Sanzione", value=sanz, inline=True)
         if c["sanction"] == "timeout":
@@ -2027,17 +2028,18 @@ class FeatureDetailView(BaseView):
         self.add_item(BackButton("features"))
 
     def build_embed(self) -> discord.Embed:
-        feats = db.get_log_config(self.guild.id).get("features", {})
-        stato = "🟢 Attiva" if feats.get(self.key, True) else "🔴 Disattivata"
-        embed = discord.Embed(title=f"🔧 {FEATURES[self.key]}", color=BLU)
-        embed.add_field(name="Stato", value=stato, inline=False)
+        config = db.get_log_config(self.guild.id)
+        feats = config.get("features", {})
+        stato = t(config, "common.enabled" if feats.get(self.key, True) else "common.disabled")
+        embed = discord.Embed(title="🔧 " + t(config, FEATURES[self.key]), color=BLU)
+        embed.add_field(name=t(config, "common.state"), value=stato, inline=False)
         return embed
 
 
 class FeatureSelect(discord.ui.Select):
-    def __init__(self):
-        options = [discord.SelectOption(label=lab, value=k) for k, lab in FEATURES.items()]
-        super().__init__(placeholder="Scegli una funzione da configurare...", options=options)
+    def __init__(self, config=None):
+        options = [discord.SelectOption(label=t(config, lab), value=k) for k, lab in FEATURES.items()]
+        super().__init__(placeholder=t(config, "dash.feature_placeholder"), options=options)
 
     async def callback(self, interaction: discord.Interaction):
         v = _feature_view(self.values[0], self.view.author_id, self.view.guild)
@@ -2047,12 +2049,13 @@ class FeatureSelect(discord.ui.Select):
 class FeaturesView(BaseView):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(author_id, guild)
-        self.add_item(FeatureSelect())
+        self.add_item(FeatureSelect(db.get_log_config(guild.id)))
         self.add_item(BackButton("home"))
 
     def build_embed(self) -> discord.Embed:
-        feats = db.get_log_config(self.guild.id).get("features", {})
-        righe = [f"{'🟢' if feats.get(k, True) else '🔴'} {lab}" for k, lab in FEATURES.items()]
+        config = db.get_log_config(self.guild.id)
+        feats = config.get("features", {})
+        righe = [f"{'🟢' if feats.get(k, True) else '🔴'} {t(config, lab)}" for k, lab in FEATURES.items()]
         embed = discord.Embed(
             title="🔧 Funzioni del bot",
             description="Seleziona una funzione dal menu per attivarla/disattivarla e configurarla.",

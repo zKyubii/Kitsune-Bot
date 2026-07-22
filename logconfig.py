@@ -3,70 +3,70 @@ from discord import app_commands
 # Definizione di tutte le categorie di log e dei rispettivi eventi.
 # Struttura: chiave -> (etichetta, {evento: descrizione})
 LOG_CATEGORIES = {
-    "members": ("👥 Members", {
-        "join": "Entrata membro",
-        "leave": "Uscita membro",
-        "bot": "Bot aggiunto / rimosso",
-        "nickname": "Cambio nickname",
-        "avatar": "Avatar server cambiato",
-        "role_given": "Ruolo assegnato",
-        "role_taken": "Ruolo rimosso",
+    "members": ("logcat.members", {
+        "join": "logev.members.join",
+        "leave": "logev.members.leave",
+        "bot": "logev.members.bot",
+        "nickname": "logev.members.nickname",
+        "avatar": "logev.members.avatar",
+        "role_given": "logev.members.role_given",
+        "role_taken": "logev.members.role_taken",
     }),
-    "messages": ("📝 Messages", {
-        "delete": "Messaggio cancellato",
-        "bulk_delete": "Cancellazione multipla",
-        "edit": "Messaggio modificato",
-        "attachment": "Allegato cancellato (file/gif/audio)",
-        "thread": "Thread creato / eliminato",
-        "pin": "Messaggio fissato / rimosso",
-        "reaction": "Reazione aggiunta / rimossa",
+    "messages": ("logcat.messages", {
+        "delete": "logev.messages.delete",
+        "bulk_delete": "logev.messages.bulk_delete",
+        "edit": "logev.messages.edit",
+        "attachment": "logev.messages.attachment",
+        "thread": "logev.messages.thread",
+        "pin": "logev.messages.pin",
+        "reaction": "logev.messages.reaction",
     }),
-    "voice": ("🔊 Voice", {
-        "join_leave": "Entrata / Uscita / Spostamento",
-        "mute_deaf": "Muta / Sordina",
-        "stream_video": "Stream / Video",
+    "voice": ("logcat.voice", {
+        "join_leave": "logev.voice.join_leave",
+        "mute_deaf": "logev.voice.mute_deaf",
+        "stream_video": "logev.voice.stream_video",
     }),
-    "channels": ("📁 Channels", {
-        "create": "Canale creato",
-        "delete": "Canale eliminato",
-        "update": "Canale modificato",
-        "permissions": "Permessi canale modificati",
-        "webhook": "Webhook creato / eliminato / modificato",
+    "channels": ("logcat.channels", {
+        "create": "logev.channels.create",
+        "delete": "logev.channels.delete",
+        "update": "logev.channels.update",
+        "permissions": "logev.channels.permissions",
+        "webhook": "logev.channels.webhook",
     }),
-    "roles": ("🎭 Roles", {
-        "create": "Ruolo creato",
-        "delete": "Ruolo eliminato",
-        "update": "Ruolo modificato",
+    "roles": ("logcat.roles", {
+        "create": "logev.roles.create",
+        "delete": "logev.roles.delete",
+        "update": "logev.roles.update",
     }),
-    "server": ("🛠️ Server", {
-        "update": "Modifiche al server",
-        "boost": "Boost aggiunto / rimosso",
+    "server": ("logcat.server", {
+        "update": "logev.server.update",
+        "boost": "logev.server.boost",
     }),
-    "actions": ("✨ Actions", {
-        "invite_create": "Invito creato",
-        "invite_delete": "Invito eliminato",
-        "emoji": "Emoji creata / eliminata / modificata",
-        "event": "Evento creato / modificato / eliminato",
+    "actions": ("logcat.actions", {
+        "invite_create": "logev.actions.invite_create",
+        "invite_delete": "logev.actions.invite_delete",
+        "emoji": "logev.actions.emoji",
+        "event": "logev.actions.event",
     }),
-    "modlogs": ("🛡️ Mod Logs", {
-        "ban": "Ban / Unban",
-        "kick": "Kick",
-        "timeout": "Timeout / Untimeout",
-        "lock": "Lock / Unlock canale",
+    "modlogs": ("logcat.modlogs", {
+        "ban": "logev.modlogs.ban",
+        "kick": "logev.modlogs.kick",
+        "timeout": "logev.modlogs.timeout",
+        "lock": "logev.modlogs.lock",
     }),
 }
 
 # Funzioni del bot attivabili/disattivabili dalla dashboard
 FEATURES = {
-    "minigames": "🎮 Minigiochi",
-    "fun": "💘 Fun (ship)",
-    "confession": "🤫 Confession",
-    "quote": "💬 Quote",
-    "partnership": "🤝 Partnership",
-    "automsg": "📨 Auto Message",
-    "autoreact": "⭐ Reaction automatiche",
-    "profile": "👤 Profilo utente",
-    "counting": "🔢 Counting",
+    "minigames": "feat.minigames",
+    "fun": "feat.fun",
+    "confession": "feat.confession",
+    "quote": "feat.quote",
+    "partnership": "feat.partnership",
+    "automsg": "feat.automsg",
+    "autoreact": "feat.autoreact",
+    "profile": "feat.profile",
+    "counting": "feat.counting",
 }
 
 
@@ -166,22 +166,22 @@ def remove_profile_mention_rule(config: dict, user_id: int) -> bool:
 
 # ── ANTISPAM ──────────────────────────────────────────────────────────────────
 SPAM_CATEGORIES = {
-    "spam": "Spam",
-    "selfbot": "Spam con selfbot",
-    "mentions": "Spam di menzioni",
-    "links": "Spam di link",
-    "external": "Spam di comandi esterni",
-    "duplicates": "Spam di duplicati",
-    "important": "Spam importante",
+    "spam": "spam.spam",
+    "selfbot": "spam.selfbot",
+    "mentions": "spam.mentions",
+    "links": "spam.links",
+    "external": "spam.external",
+    "duplicates": "spam.duplicates",
+    "important": "spam.important",
 }
 
 SANCTIONS = {
-    "none": "Nessuna (solo cancella)",
-    "warn": "Warn",
-    "timeout": "Timeout",
-    "kick": "Kick",
-    "softban": "Soft Ban",
-    "ban": "Ban",
+    "none": "sanction.none",
+    "warn": "sanction.warn",
+    "timeout": "sanction.timeout",
+    "kick": "sanction.kick",
+    "softban": "sanction.softban",
+    "ban": "sanction.ban",
 }
 
 # Configurazione di default per ogni categoria
