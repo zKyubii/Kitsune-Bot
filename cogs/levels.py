@@ -5,6 +5,14 @@ from discord.ext import commands, tasks
 from discord import app_commands
 
 import database as db
+from locales import t
+
+
+def _t(ctx_or_inter, key: str, **kwargs) -> str:
+    """Scorciatoia: risolve la lingua del server da ctx o interaction."""
+    gid = getattr(ctx_or_inter, "guild_id", None) or ctx_or_inter.guild.id
+    return t(db.get_log_config(gid), key, **kwargs)
+
 import levelsystem as ls
 
 BLU = 0x5865F2
@@ -192,7 +200,7 @@ class Levels(commands.Cog):
     async def rank(self, ctx: commands.Context, utente: discord.Member = None):
         c = ls.cfg(db.get_log_config(ctx.guild.id))
         if not c["enabled"]:
-            await ctx.send("❌ Il sistema livelli è disattivato.")
+            await ctx.send(_t(ctx, "lvl.disabled"))
             return
         member = utente or ctx.author
         xp = db.get_xp(ctx.guild.id, member.id)
@@ -214,7 +222,7 @@ class Levels(commands.Cog):
         c = ls.cfg(db.get_log_config(ctx.guild.id))
         rows = db.level_top(ctx.guild.id, 10)
         if not rows:
-            await ctx.send("Nessuno ha ancora XP. 🤷")
+            await ctx.send(_t(ctx, "lvl.no_xp"))
             return
         medals = {0: "🥇", 1: "🥈", 2: "🥉"}
         lines = []
@@ -222,7 +230,7 @@ class Levels(commands.Cog):
             info = ls.level_info(c, r["xp"])
             pos = medals.get(i, f"`#{i + 1}`")
             lines.append(f"{pos} <@{r['user_id']}>\n　**Level:** `{info['level']}`　**Exp:** `{r['xp']}/{info['next_total']}`")
-        embed = discord.Embed(title=f"🏆 {ctx.guild.name} — Leaderboard",
+        embed = discord.Embed(title=_t(ctx, "lvl.leaderboard_title", guild=ctx.guild.name),
                               color=BLU, description="\n\n".join(lines))
         if ctx.guild.icon:
             embed.set_thumbnail(url=ctx.guild.icon.url)
@@ -244,8 +252,12 @@ class Levels(commands.Cog):
         await self._post_change(interaction.guild_id, utente)
         c = ls.cfg(db.get_log_config(interaction.guild_id))
         await interaction.response.send_message(
-            f"✅ {('Dati' if quantita >= 0 else 'Tolti')} **{abs(quantita)}** XP a {utente.mention}. "
-            f"Ora: **{new}** XP (livello {ls.level_from_xp(c, new)}).", ephemeral=True)
+            _t(interaction, "lvl.xp_given",
+               verb=_t(interaction, "lvl.verb_given" if quantita >= 0 else "lvl.verb_taken"),
+               amount=abs(quantita), user=utente.mention)
+            + " "
+            + _t(interaction, "lvl.xp_now", xp=new, level=ls.level_from_xp(c, new)),
+            ephemeral=True)
 
     @level_group.command(name="giverole", description="Dà XP a tutti i membri con un ruolo")
     @app_commands.checks.has_permissions(administrator=True)
@@ -259,7 +271,7 @@ class Levels(commands.Cog):
             await self._post_change(interaction.guild_id, m)
             n += 1
         await interaction.followup.send(
-            f"✅ {('Dati' if quantita >= 0 else 'Tolti')} **{abs(quantita)}** XP a **{n}** membri con {ruolo.mention}.",
+            _t(interaction, "lvl.xp_given_role", verb=_t(interaction, "lvl.verb_given" if quantita >= 0 else "lvl.verb_taken"), amount=abs(quantita), count=n, role=ruolo.mention),
             ephemeral=True)
 
     @level_group.command(name="set", description="Imposta gli XP totali di un utente")
@@ -269,7 +281,7 @@ class Levels(commands.Cog):
         await self._post_change(interaction.guild_id, utente)
         c = ls.cfg(db.get_log_config(interaction.guild_id))
         await interaction.response.send_message(
-            f"✅ {utente.mention} ora ha **{max(0, xp)}** XP (livello {ls.level_from_xp(c, max(0, xp))}).",
+            _t(interaction, "lvl.xp_set", user=utente.mention, xp=max(0, xp), level=ls.level_from_xp(c, max(0, xp))),
             ephemeral=True)
 
     @level_group.command(name="reset", description="Azzera gli XP di un utente")
@@ -277,7 +289,7 @@ class Levels(commands.Cog):
     async def reset(self, interaction: discord.Interaction, utente: discord.Member):
         db.reset_level_user(interaction.guild_id, utente.id)
         await self._post_change(interaction.guild_id, utente)
-        await interaction.response.send_message(f"✅ XP di {utente.mention} azzerati.", ephemeral=True)
+        await interaction.response.send_message(_t(interaction, "lvl.xp_reset", user=utente.mention), ephemeral=True)
 
 
 async def setup(bot):

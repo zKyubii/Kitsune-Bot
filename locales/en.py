@@ -109,6 +109,64 @@ STRINGS = {
     "partner.disabled": "❌ The **Partnership** feature is disabled on this server.",
     "partner.no_role": "❌ You don't have a role authorised to make partnerships.",
 
+    # ── MINIGAMES ───────────────────────────────────────────────────────────
+    "mg.disabled": "🚫 Minigames aren't available on this server right now.",
+    "mg.coin_heads": "Heads 🪙",
+    "mg.coin_tails": "Tails ❌",
+    "mg.coin_usage": "❌ Choose **heads** or **tails**. Example: `+moneta heads`",
+    "mg.coin_win": "🎉 You got it!",
+    "mg.coin_lose": "😅 You got it wrong!",
+    "mg.coin_result": "You picked **{choice}**\nThe coin landed on: **{result}**\n{outcome}",
+    "mg.8ball_usage": "❌ Ask a question. Example: `+8ball will I get married?`",
+    "mg.8ball_title": "🎱 Magic 8-Ball",
+    "mg.8ball_question": "❓ Question",
+    "mg.8ball_answer": "💬 Answer",
+    "mg.8ball_answers": "Yes, absolutely! ✅\nNo, definitely not. ❌\nMaybe... 🤔\n"
+                        "The stars say yes. ⭐\nDon't count on it. 🚫\nEverything points to yes. 👍\n"
+                        "The outlook isn't good. 😬\nAsk again later. 🔄\n"
+                        "It's certain! 💯\nSigns point to no. 👎",
+    "mg.rps_usage": "❌ Choose **rock**, **paper** or **scissors**. Example: `+rps rock`",
+    "mg.rps_rock": "Rock",
+    "mg.rps_paper": "Paper",
+    "mg.rps_scissors": "Scissors",
+    "mg.rps_title": "Rock, Paper, Scissors",
+    "mg.rps_you": "You",
+    "mg.rps_bot": "Bot",
+    "mg.rps_result": "Result",
+    "mg.rps_draw": "Draw! 🤝",
+    "mg.rps_win": "You won! 🎉",
+    "mg.rps_lose": "You lost! 😅",
+    "mg.guess_running": "⚠️ There's already a game running in this channel! Use `+tentativo <number>`.",
+    "mg.guess_started": "🎮 I picked a number between **1 and 100**! Use `+tentativo <number>` to guess.",
+    "mg.guess_need_number": "❌ Write a number. Example: `+tentativo 50`",
+    "mg.guess_no_game": "❌ No game running. Use `+indovina` to start one.",
+    "mg.guess_won_one": "🎉 **{user}** guessed it! It was **{number}** in {tries} try!",
+    "mg.guess_won_many": "🎉 **{user}** guessed it! It was **{number}** in {tries} tries!",
+    "mg.guess_low": "📈 **{number}** is too low! (Try {tries})",
+    "mg.guess_high": "📉 **{number}** is too high! (Try {tries})",
+
+    # ── LEVELS ──────────────────────────────────────────────────────────────
+    "lvl.disabled": "❌ The levelling system is disabled.",
+    "lvl.no_xp": "Nobody has XP yet. 🤷",
+    "lvl.leaderboard_title": "🏆 {guild} — Leaderboard",
+    "lvl.xp_given": "✅ {verb} **{amount}** XP to {user}.",
+    "lvl.xp_given_role": "✅ {verb} **{amount}** XP to **{count}** members with {role}.",
+    "lvl.xp_set": "✅ {user} now has **{xp}** XP (level {level}).",
+    "lvl.xp_reset": "✅ {user}'s XP reset.",
+    "lvl.xp_now": "Now: **{xp}** XP (level {level}).",
+    "lvl.verb_given": "Gave",
+    "lvl.verb_taken": "Took",
+
+    # ── GREETINGS / BOOST ───────────────────────────────────────────────────
+    "greet.not_configured": "❌ The **{type}** message isn't configured. Use `/set {type}`.",
+    "greet.embed_gone": "❌ The embed `{name}` no longer exists. Reconfigure with `/set {type}`.",
+    "greet.send_error": "❌ Error while sending: {error}",
+    "greet.sent": "✅ Message sent in {channel}.",
+    "greet.embed_missing": "❌ The embed `{name}` doesn't exist. Create it with `/embed create`.",
+    "greet.extra_message": "\nMessage: {msg}",
+    "greet.welcome_set": "✅ Welcome set in {channel} using the embed `{name}`.{extra}",
+    "greet.boost_set": "✅ Boost message set in {channel} using the embed `{name}`.{extra}",
+
     # ── COUNTING: chat messages ─────────────────────────────────────────────
     "counting.deleted": "⚠️ {user} has deleted their number: ```{n}```"
                         "The next number is **{next}**.",

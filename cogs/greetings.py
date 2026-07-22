@@ -6,6 +6,14 @@ from discord.ext import commands
 from discord import app_commands
 
 import database as db
+from locales import t
+
+
+def _t(ctx_or_inter, key: str, **kwargs) -> str:
+    """Scorciatoia: risolve la lingua del server da ctx o interaction."""
+    gid = getattr(ctx_or_inter, "guild_id", None) or ctx_or_inter.guild.id
+    return t(db.get_log_config(gid), key, **kwargs)
+
 from cogs.embedbuilder import costruisci_embed, _replace
 
 _BOOST_MSG_TYPES = (
@@ -38,18 +46,18 @@ class Greetings(commands.Cog):
         ch = guild.get_channel(conf.get("channel")) if conf.get("channel") else None
         name = conf.get("embed")
         if not ch or not name:
-            return False, f"❌ Il messaggio **{tipo}** non è configurato. Usa `/set {tipo}`."
+            return False, t(db.get_log_config(guild.id), "greet.not_configured", type=tipo)
         data = db.get_embed(guild.id, name)
         if data is None:
-            return False, f"❌ L'embed `{name}` non esiste più. Riconfigura con `/set {tipo}`."
+            return False, t(db.get_log_config(guild.id), "greet.embed_gone", name=name, type=tipo)
         msg = conf.get("message")
         content = _replace(msg, member, guild) if msg else member.mention
         try:
             await ch.send(content=content, embed=costruisci_embed(data, member=member, guild=guild),
                           allowed_mentions=discord.AllowedMentions(users=True, roles=True, everyone=False))
         except discord.HTTPException as e:
-            return False, f"❌ Errore durante l'invio: {e}"
-        return True, f"✅ Messaggio inviato in {ch.mention}."
+            return False, t(db.get_log_config(guild.id), "greet.send_error", error=e)
+        return True, t(db.get_log_config(guild.id), "greet.sent", channel=ch.mention)
 
     # ── SET ─────────────────────────────────────────────────────────────────────
     @set_group.command(name="greet", description="Imposta il canale e l'embed di benvenuto")
@@ -60,14 +68,14 @@ class Greetings(commands.Cog):
                         messaggio: str = None):
         if db.get_embed(interaction.guild_id, embed) is None:
             await interaction.response.send_message(
-                f"❌ L'embed `{embed}` non esiste. Crealo con `/embed create`.", ephemeral=True)
+                _t(interaction, "greet.embed_missing", name=embed), ephemeral=True)
             return
         config = db.get_log_config(interaction.guild_id)
         config["greet"] = {"channel": canale.id, "embed": embed, "message": messaggio}
         db.save_log_config(interaction.guild_id, config)
         extra = f"\nMessaggio: {messaggio}" if messaggio else ""
         await interaction.response.send_message(
-            f"✅ Benvenuto impostato in {canale.mention} con l'embed `{embed}`.{extra}", ephemeral=True)
+            _t(interaction, "greet.welcome_set", channel=canale.mention, name=embed, extra=extra), ephemeral=True)
 
     @set_group.command(name="boost", description="Imposta il canale e l'embed per i boost")
     @app_commands.describe(canale="Canale dove inviare il messaggio di boost", embed="Nome dell'embed da usare",
@@ -77,14 +85,14 @@ class Greetings(commands.Cog):
                         messaggio: str = None):
         if db.get_embed(interaction.guild_id, embed) is None:
             await interaction.response.send_message(
-                f"❌ L'embed `{embed}` non esiste. Crealo con `/embed create`.", ephemeral=True)
+                _t(interaction, "greet.embed_missing", name=embed), ephemeral=True)
             return
         config = db.get_log_config(interaction.guild_id)
         config["boost"] = {"channel": canale.id, "embed": embed, "message": messaggio}
         db.save_log_config(interaction.guild_id, config)
         extra = f"\nMessaggio: {messaggio}" if messaggio else ""
         await interaction.response.send_message(
-            f"✅ Messaggio di boost impostato in {canale.mention} con l'embed `{embed}`.{extra}", ephemeral=True)
+            _t(interaction, "greet.boost_set", channel=canale.mention, name=embed, extra=extra), ephemeral=True)
 
     @set_greet.autocomplete("embed")
     @set_boost.autocomplete("embed")

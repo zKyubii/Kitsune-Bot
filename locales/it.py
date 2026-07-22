@@ -109,6 +109,64 @@ STRINGS = {
     "partner.disabled": "❌ La funzione **Partnership** è disattivata su questo server.",
     "partner.no_role": "❌ Non hai un ruolo autorizzato a fare partnership.",
 
+    # ── MINIGIOCHI ──────────────────────────────────────────────────────────
+    "mg.disabled": "🚫 I minigiochi non sono disponibili al momento su questo server.",
+    "mg.coin_heads": "Testa 🪙",
+    "mg.coin_tails": "Croce ❌",
+    "mg.coin_usage": "❌ Scegli **testa** o **croce**. Esempio: `+moneta testa`",
+    "mg.coin_win": "🎉 Hai indovinato!",
+    "mg.coin_lose": "😅 Hai sbagliato!",
+    "mg.coin_result": "Hai scelto **{choice}**\nLa moneta è uscita: **{result}**\n{outcome}",
+    "mg.8ball_usage": "❌ Scrivi una domanda. Esempio: `+8ball mi sposerò?`",
+    "mg.8ball_title": "🎱 Palla Magica",
+    "mg.8ball_question": "❓ Domanda",
+    "mg.8ball_answer": "💬 Risposta",
+    "mg.8ball_answers": "Sì, assolutamente! ✅\nNo, decisamente no. ❌\nForse... 🤔\n"
+                        "Le stelle dicono sì. ⭐\nNon ci contare. 🚫\nTutto indica di sì. 👍\n"
+                        "Le prospettive non sono buone. 😬\nChiedilo di nuovo più tardi. 🔄\n"
+                        "È certo! 💯\nI segni puntano al no. 👎",
+    "mg.rps_usage": "❌ Scegli **sasso**, **carta** o **forbice**. Esempio: `+rps sasso`",
+    "mg.rps_rock": "Sasso",
+    "mg.rps_paper": "Carta",
+    "mg.rps_scissors": "Forbice",
+    "mg.rps_title": "Carta, Forbice, Sasso",
+    "mg.rps_you": "Tu",
+    "mg.rps_bot": "Bot",
+    "mg.rps_result": "Risultato",
+    "mg.rps_draw": "Pareggio! 🤝",
+    "mg.rps_win": "Hai vinto! 🎉",
+    "mg.rps_lose": "Hai perso! 😅",
+    "mg.guess_running": "⚠️ C'è già una partita in corso in questo canale! Usa `+tentativo <numero>`.",
+    "mg.guess_started": "🎮 Ho pensato un numero tra **1 e 100**! Usa `+tentativo <numero>` per indovinare.",
+    "mg.guess_need_number": "❌ Scrivi un numero. Esempio: `+tentativo 50`",
+    "mg.guess_no_game": "❌ Nessuna partita in corso. Usa `+indovina` per iniziarne una.",
+    "mg.guess_won_one": "🎉 **{user}** ha indovinato! Era **{number}** in {tries} tentativo!",
+    "mg.guess_won_many": "🎉 **{user}** ha indovinato! Era **{number}** in {tries} tentativi!",
+    "mg.guess_low": "📈 **{number}** è troppo basso! (Tentativo {tries})",
+    "mg.guess_high": "📉 **{number}** è troppo alto! (Tentativo {tries})",
+
+    # ── LIVELLI ─────────────────────────────────────────────────────────────
+    "lvl.disabled": "❌ Il sistema livelli è disattivato.",
+    "lvl.no_xp": "Nessuno ha ancora XP. 🤷",
+    "lvl.leaderboard_title": "🏆 {guild} — Classifica",
+    "lvl.xp_given": "✅ {verb} **{amount}** XP a {user}.",
+    "lvl.xp_given_role": "✅ {verb} **{amount}** XP a **{count}** membri con {role}.",
+    "lvl.xp_set": "✅ {user} ora ha **{xp}** XP (livello {level}).",
+    "lvl.xp_reset": "✅ XP di {user} azzerati.",
+    "lvl.xp_now": "Ora: **{xp}** XP (livello {level}).",
+    "lvl.verb_given": "Dati",
+    "lvl.verb_taken": "Tolti",
+
+    # ── BENVENUTI / BOOST ───────────────────────────────────────────────────
+    "greet.not_configured": "❌ Il messaggio **{type}** non è configurato. Usa `/set {type}`.",
+    "greet.embed_gone": "❌ L'embed `{name}` non esiste più. Riconfigura con `/set {type}`.",
+    "greet.send_error": "❌ Errore durante l'invio: {error}",
+    "greet.sent": "✅ Messaggio inviato in {channel}.",
+    "greet.embed_missing": "❌ L'embed `{name}` non esiste. Crealo con `/embed create`.",
+    "greet.extra_message": "\nMessaggio: {msg}",
+    "greet.welcome_set": "✅ Benvenuto impostato in {channel} con l'embed `{name}`.{extra}",
+    "greet.boost_set": "✅ Messaggio di boost impostato in {channel} con l'embed `{name}`.{extra}",
+
     # ── COUNTING: messaggi in chat ──────────────────────────────────────────
     "counting.deleted": "⚠️ {user} ha cancellato il suo numero: ```{n}```"
                         "Il prossimo numero è **{next}**.",
