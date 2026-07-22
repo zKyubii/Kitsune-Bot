@@ -32,11 +32,11 @@ class Greetings(commands.Cog):
         self._boost_da_messaggio = {}
 
     set_group = app_commands.Group(
-        name="set", description="Configura i messaggi automatici",
+        name="set", description="Configure the automatic messages",
         default_permissions=discord.Permissions(manage_guild=True),
     )
     test_group = app_commands.Group(
-        name="test", description="Prova i messaggi automatici",
+        name="test", description="Test the automatic messages",
         default_permissions=discord.Permissions(manage_guild=True),
     )
 
@@ -60,9 +60,9 @@ class Greetings(commands.Cog):
         return True, t(db.get_log_config(guild.id), "greet.sent", channel=ch.mention)
 
     # ── SET ─────────────────────────────────────────────────────────────────────
-    @set_group.command(name="greet", description="Imposta il canale e l'embed di benvenuto")
-    @app_commands.describe(canale="Canale dove inviare il benvenuto", embed="Nome dell'embed da usare",
-                           messaggio="Testo sopra l'embed (puoi taggare utente/staff e usare emoji)")
+    @set_group.command(name="greet", description="Set the welcome channel and embed")
+    @app_commands.describe(canale="Channel to send the welcome in", embed="Name of the embed to use",
+                           messaggio="Text above the embed (you can tag users/staff and use emoji)")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def set_greet(self, interaction: discord.Interaction, canale: discord.TextChannel, embed: str,
                         messaggio: str = None):
@@ -77,9 +77,9 @@ class Greetings(commands.Cog):
         await interaction.response.send_message(
             _t(interaction, "greet.welcome_set", channel=canale.mention, name=embed, extra=extra), ephemeral=True)
 
-    @set_group.command(name="boost", description="Imposta il canale e l'embed per i boost")
-    @app_commands.describe(canale="Canale dove inviare il messaggio di boost", embed="Nome dell'embed da usare",
-                           messaggio="Testo sopra l'embed (puoi taggare utente/staff e usare emoji)")
+    @set_group.command(name="boost", description="Set the boost channel and embed")
+    @app_commands.describe(canale="Channel to send the boost message in", embed="Name of the embed to use",
+                           messaggio="Text above the embed (you can tag users/staff and use emoji)")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def set_boost(self, interaction: discord.Interaction, canale: discord.TextChannel, embed: str,
                         messaggio: str = None):
@@ -101,13 +101,13 @@ class Greetings(commands.Cog):
         return [app_commands.Choice(name=n, value=n) for n in names if current.lower() in n.lower()][:25]
 
     # ── TEST ────────────────────────────────────────────────────────────────────
-    @test_group.command(name="greet", description="Prova il messaggio di benvenuto (con te come esempio)")
+    @test_group.command(name="greet", description="Test the welcome message (using you as the example)")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def test_greet(self, interaction: discord.Interaction):
         _, msg = await self._invia(interaction.guild, "greet", interaction.user)
         await interaction.response.send_message(msg, ephemeral=True)
 
-    @test_group.command(name="boost", description="Prova il messaggio di boost (con te come esempio)")
+    @test_group.command(name="boost", description="Test the boost message (using you as the example)")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def test_boost(self, interaction: discord.Interaction):
         _, msg = await self._invia(interaction.guild, "boost", interaction.user)

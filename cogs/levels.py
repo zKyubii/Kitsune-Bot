@@ -238,14 +238,14 @@ class Levels(commands.Cog):
 
     # ── /level (admin) ───────────────────────────────────────────────────────
     level_group = app_commands.Group(
-        name="level", description="Gestione XP livelli (admin)",
+        name="level", description="Level XP management (admin)",
         default_permissions=discord.Permissions(administrator=True), guild_only=True)
 
     async def _post_change(self, guild_id, member):
         c = ls.cfg(db.get_log_config(guild_id))
         await self._sync_rewards(member, c, ls.level_from_xp(c, db.get_xp(guild_id, member.id)))
 
-    @level_group.command(name="give", description="Dà XP a un utente")
+    @level_group.command(name="give", description="Give XP to a user")
     @app_commands.checks.has_permissions(administrator=True)
     async def give(self, interaction: discord.Interaction, utente: discord.Member, quantita: int):
         new = db.add_xp(interaction.guild_id, utente.id, quantita)
@@ -259,7 +259,7 @@ class Levels(commands.Cog):
             + _t(interaction, "lvl.xp_now", xp=new, level=ls.level_from_xp(c, new)),
             ephemeral=True)
 
-    @level_group.command(name="giverole", description="Dà XP a tutti i membri con un ruolo")
+    @level_group.command(name="giverole", description="Give XP to every member with a role")
     @app_commands.checks.has_permissions(administrator=True)
     async def giverole(self, interaction: discord.Interaction, ruolo: discord.Role, quantita: int):
         await interaction.response.defer(ephemeral=True)
@@ -274,7 +274,7 @@ class Levels(commands.Cog):
             _t(interaction, "lvl.xp_given_role", verb=_t(interaction, "lvl.verb_given" if quantita >= 0 else "lvl.verb_taken"), amount=abs(quantita), count=n, role=ruolo.mention),
             ephemeral=True)
 
-    @level_group.command(name="set", description="Imposta gli XP totali di un utente")
+    @level_group.command(name="set", description="Set a user's total XP")
     @app_commands.checks.has_permissions(administrator=True)
     async def set_cmd(self, interaction: discord.Interaction, utente: discord.Member, xp: int):
         db.set_xp(interaction.guild_id, utente.id, xp)
@@ -284,7 +284,7 @@ class Levels(commands.Cog):
             _t(interaction, "lvl.xp_set", user=utente.mention, xp=max(0, xp), level=ls.level_from_xp(c, max(0, xp))),
             ephemeral=True)
 
-    @level_group.command(name="reset", description="Azzera gli XP di un utente")
+    @level_group.command(name="reset", description="Reset a user's XP")
     @app_commands.checks.has_permissions(administrator=True)
     async def reset(self, interaction: discord.Interaction, utente: discord.Member):
         db.reset_level_user(interaction.guild_id, utente.id)

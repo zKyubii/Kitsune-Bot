@@ -135,8 +135,8 @@ class Partnership(commands.Cog):
                         pass
             db.delete_partnership(row["id"])
 
-    @app_commands.command(name="partnership", description="Esegui una partnership")
-    @app_commands.describe(manager="L'utente con cui stai facendo la partnership (opzionale)")
+    @app_commands.command(name="partnership", description="Run a partnership")
+    @app_commands.describe(manager="The user you are doing the partnership with (optional)")
     @app_commands.guild_only()
     async def partnership(self, interaction: discord.Interaction, manager: discord.Member = None):
         config = db.get_log_config(interaction.guild_id)

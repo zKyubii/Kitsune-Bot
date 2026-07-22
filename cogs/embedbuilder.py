@@ -4,6 +4,15 @@ from discord import app_commands
 import datetime
 
 import database as db
+from locales import t
+
+
+_CTX = {}
+
+
+def _T(key: str, **kwargs) -> str:
+    """Testo nella lingua del server corrente."""
+    return t(_CTX.get("config"), key, **kwargs)
 
 
 def _replace(text, member, guild):
@@ -63,7 +72,7 @@ def costruisci_embed(data: dict, member=None, guild=None) -> discord.Embed:
         e.timestamp = datetime.datetime.now(datetime.timezone.utc)
 
     if not (e.title or e.description or a_name or f_text or _url_ok(img)):
-        e.description = "*(embed vuoto — usa i bottoni qui sotto per modificarlo)*"
+        e.description = _T("eb.embed_vuoto_usa_bottoni_qui")
     return e
 
 
@@ -111,7 +120,7 @@ def build_role_view(data: dict, guild) -> discord.ui.View | None:
                 continue
             single = comp.get("single")
             view.add_item(discord.ui.Select(
-                placeholder=comp.get("placeholder") or "Seleziona un ruolo…",
+                placeholder=comp.get("placeholder") or _T("eb.seleziona_ruolo"),
                 min_values=0, max_values=1 if single else len(options),
                 options=options, custom_id=f"erole:sel:{i}", row=row))
             row += 1
@@ -158,14 +167,14 @@ async def _apply_select(interaction, custom_id, values):
             await member.remove_roles(*remove, reason="Self-role menu")
     except discord.Forbidden:
         return await interaction.response.send_message(
-            "❌ Non riesco a gestire questi ruoli: sposta il mio ruolo più in alto nella gerarchia.",
+            _T("eb.non_riesco_gestire_questi_ruoli"),
             ephemeral=True)
     parts = []
     if add:
         parts.append("➕ " + " ".join(r.mention for r in add))
     if remove:
         parts.append("➖ " + " ".join(r.mention for r in remove))
-    await interaction.response.send_message("\n".join(parts) or "Nessuna modifica.", ephemeral=True)
+    await interaction.response.send_message("\n".join(parts) or _T("eb.nessuna_modifica"), ephemeral=True)
 
 
 async def _apply_button(interaction, role_id):
@@ -173,10 +182,10 @@ async def _apply_button(interaction, role_id):
     guild, member = interaction.guild, interaction.user
     role = guild.get_role(role_id)
     if not role:
-        return await interaction.response.send_message("❌ Ruolo non trovato.", ephemeral=True)
+        return await interaction.response.send_message(_T("eb.ruolo_non_trovato"), ephemeral=True)
     if role.managed or role >= guild.me.top_role:
         return await interaction.response.send_message(
-            "❌ Non posso gestire questo ruolo (controlla la gerarchia).", ephemeral=True)
+            _T("eb.non_posso_gestire_questo_ruolo"), ephemeral=True)
     try:
         if role in member.roles:
             await member.remove_roles(role, reason="Self-role button")
@@ -301,10 +310,10 @@ class ImagesModal(discord.ui.Modal, title="Immagini"):
 
 
 # ── SOTTO-EDITOR: costruzione/modifica menu e pulsanti ruolo ──────────────────
-class OptionModal(discord.ui.Modal, title="Opzione del menu"):
+class OptionModal(discord.ui.Modal):
     """Aggiunge una nuova opzione (role passato) o modifica il testo di una esistente."""
     def __init__(self, menu_view, role=None, edit_idx=None, edit_view=None):
-        super().__init__()
+        super().__init__(title=_T("eb.opzione_menu"))
         self.menu_view = menu_view
         self.role = role
         self.edit_idx = edit_idx
@@ -312,7 +321,7 @@ class OptionModal(discord.ui.Modal, title="Opzione del menu"):
         existing = menu_view.options[edit_idx] if edit_idx is not None else {}
         default_label = existing.get("label") or (role.name if role else "")
         self.etichetta = discord.ui.TextInput(label="Etichetta", default=default_label, max_length=100)
-        self.emoji = discord.ui.TextInput(label="Emoji (opzionale)", required=False, max_length=100,
+        self.emoji = discord.ui.TextInput(label=_T("eb.emoji_opzionale"), required=False, max_length=100,
                                           default=existing.get("emoji", ""), placeholder="😀  oppure  <:nome:id>")
         self.descrizione = discord.ui.TextInput(label="Descrizione (opzionale)", required=False, max_length=100,
                                                 default=existing.get("description", ""))
@@ -338,13 +347,13 @@ class OptionModal(discord.ui.Modal, title="Opzione del menu"):
             await self.menu_view.update()
 
 
-class MenuSettingsModal(discord.ui.Modal, title="Impostazioni menu"):
+class MenuSettingsModal(discord.ui.Modal):
     def __init__(self, menu_view):
-        super().__init__()
+        super().__init__(title=_T("eb.impostazioni_menu"))
         self.menu_view = menu_view
         self.placeholder = discord.ui.TextInput(
             label="Testo segnaposto", required=False, max_length=150,
-            default=menu_view.placeholder, placeholder="Seleziona un ruolo…")
+            default=menu_view.placeholder, placeholder=_T("eb.seleziona_ruolo"))
         self.single = discord.ui.TextInput(
             label="Scelta singola? (si/no)", required=False, max_length=3,
             default="si" if menu_view.single else "no")
@@ -361,7 +370,7 @@ class MenuSettingsModal(discord.ui.Modal, title="Impostazioni menu"):
 # — modifica di una singola opzione —
 class OptionRoleSelect(discord.ui.RoleSelect):
     def __init__(self, idx):
-        super().__init__(placeholder="🔄 Cambia il ruolo di questa opzione…",
+        super().__init__(placeholder=_T("eb.cambia_ruolo_questa_opzione"),
                          min_values=1, max_values=1, row=0)
         self.idx = idx
 
@@ -372,7 +381,7 @@ class OptionRoleSelect(discord.ui.RoleSelect):
 
 class OptionTextButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="✏️ Testo/Emoji", style=discord.ButtonStyle.secondary, row=1)
+        super().__init__(label=_T("eb.testo_emoji"), style=discord.ButtonStyle.secondary, row=1)
 
     async def callback(self, interaction):
         v = self.view
@@ -382,7 +391,7 @@ class OptionTextButton(discord.ui.Button):
 
 class OptionRemoveButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="🗑️ Rimuovi opzione", style=discord.ButtonStyle.danger, row=1)
+        super().__init__(label=_T("eb.rimuovi_opzione"), style=discord.ButtonStyle.danger, row=1)
 
     async def callback(self, interaction):
         v = self.view
@@ -417,22 +426,22 @@ class OptionEditView(discord.ui.View):
 
     def render(self):
         o = self.menu_view.options[self.idx]
-        return (f"✏️ **Modifica opzione {self.idx + 1}**\n"
-                f"• Etichetta: **{o.get('label') or '—'}**\n"
-                f"• Emoji: {o.get('emoji') or '—'}\n"
-                f"• Descrizione: {o.get('description') or '—'}\n"
-                f"• Ruolo: <@&{o.get('role')}>\n\n"
-                "Cambia il ruolo col menu, o modifica testo/emoji col pulsante.")
+        return (f"✏️ **Modifica opzione {self.idx + 1}**\n" +
+                f"• Etichetta: **{o.get('label') or '—'}**\n" +
+                f"• Emoji: {o.get('emoji') or '—'}\n" +
+                f"• Descrizione: {o.get('description') or '—'}\n" +
+                f"• Ruolo: <@&{o.get('role')}>\n\n" +
+                _T("eb.cambia_ruolo_col_menu_o2"))
 
 
 # — aggiunta opzione / scelta opzione da modificare —
 class MenuAddRoleSelect(discord.ui.RoleSelect):
     def __init__(self):
-        super().__init__(placeholder="➕ Aggiungi un ruolo al menu…", min_values=1, max_values=1, row=0)
+        super().__init__(placeholder=_T("eb.aggiungi_ruolo_al_menu"), min_values=1, max_values=1, row=0)
 
     async def callback(self, interaction):
         if len(self.view.options) >= 25:
-            return await interaction.response.send_message("❌ Massimo 25 opzioni per menu.", ephemeral=True)
+            return await interaction.response.send_message(_T("eb.massimo_25_opzioni_menu"), ephemeral=True)
         await interaction.response.send_modal(OptionModal(self.view, role=self.values[0]))
 
 
@@ -444,7 +453,7 @@ class OptionPickSelect(discord.ui.Select):
             em = (o.get("emoji") + " ") if o.get("emoji") else ""
             label = (o.get("label") or "opzione")[:80]
             options.append(discord.SelectOption(label=f"{i + 1}. {em}{label}"[:100], value=str(i)))
-        super().__init__(placeholder="✏️ Modifica un'opzione esistente…", options=options, row=1)
+        super().__init__(placeholder=_T("eb.modifica_opzione_esistente"), options=options, row=1)
 
     async def callback(self, interaction):
         v = OptionEditView(self.menu_view, int(self.values[0]))
@@ -454,7 +463,7 @@ class OptionPickSelect(discord.ui.Select):
 
 class MenuSettingsButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="⚙️ Impostazioni", style=discord.ButtonStyle.secondary, row=2)
+        super().__init__(label=_T("eb.impostazioni"), style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction):
         await interaction.response.send_modal(MenuSettingsModal(self.view))
@@ -462,12 +471,12 @@ class MenuSettingsButton(discord.ui.Button):
 
 class MenuSaveButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="✅ Salva menu", style=discord.ButtonStyle.success, row=2)
+        super().__init__(label=_T("eb.salva_menu"), style=discord.ButtonStyle.success, row=2)
 
     async def callback(self, interaction):
         v = self.view
         if not v.options:
-            return await interaction.response.send_message("❌ Aggiungi almeno un'opzione.", ephemeral=True)
+            return await interaction.response.send_message(_T("eb.aggiungi_almeno_opzione"), ephemeral=True)
         comp = {"type": "select", "placeholder": v.placeholder, "single": v.single, "options": v.options}
         comps = v.builder.data.setdefault("components", [])
         if v.edit_index is not None and 0 <= v.edit_index < len(comps):
@@ -476,13 +485,13 @@ class MenuSaveButton(discord.ui.Button):
             comps.append(comp)
         db.save_embed(v.builder.guild.id, v.builder.name, v.builder.data)
         await v.builder.update_message()
-        await interaction.response.edit_message(content="✅ Menu salvato!", view=None)
+        await interaction.response.edit_message(content=_T("eb.menu_salvato"), view=None)
         v.stop()
 
 
 class ComponentDeleteButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="🗑️ Elimina componente", style=discord.ButtonStyle.danger, row=3)
+        super().__init__(label=_T("eb.elimina_componente"), style=discord.ButtonStyle.danger, row=3)
 
     async def callback(self, interaction):
         v = self.view
@@ -491,7 +500,7 @@ class ComponentDeleteButton(discord.ui.Button):
             comps.pop(v.edit_index)
             db.save_embed(v.builder.guild.id, v.builder.name, v.builder.data)
             await v.builder.update_message()
-        await interaction.response.edit_message(content="🗑️ Componente eliminato.", view=None)
+        await interaction.response.edit_message(content=_T("eb.componente_eliminato"), view=None)
         v.stop()
 
 
@@ -526,14 +535,14 @@ class MenuBuilderView(discord.ui.View):
         return interaction.user.id == self.builder.author_id
 
     def render(self):
-        titolo = "🎭 **Modifica menu**" if self.edit_index is not None else "🎭 **Nuovo menu a tendina**"
+        titolo = _T("eb.modifica_menu") if self.edit_index is not None else "🎭 **Nuovo menu a tendina**"
         righe = [f"{titolo} — {len(self.options)} opzioni"]
         for i, o in enumerate(self.options):
             em = (o["emoji"] + " ") if o.get("emoji") else ""
             righe.append(f"{i + 1}. {em}{o.get('label') or '—'} → <@&{o['role']}>")
         modo = "scelta singola" if self.single else "scelta multipla"
         righe.append(f"\n_Segnaposto: {self.placeholder or 'Seleziona un ruolo…'} · {modo}_")
-        righe.append("➕ aggiungi · ✏️ modifica un'opzione · poi **Salva menu**.")
+        righe.append(_T("eb.aggiungi_modifica_opzione_poi_salva"))
         return "\n".join(righe)
 
     async def update(self):
@@ -542,10 +551,10 @@ class MenuBuilderView(discord.ui.View):
             await self.message.edit(content=self.render(), view=self)
 
 
-class ButtonOptionModal(discord.ui.Modal, title="Pulsante ruolo"):
+class ButtonOptionModal(discord.ui.Modal):
     """Aggiunge un nuovo pulsante (role passato) o modifica uno esistente."""
     def __init__(self, btn_view, role=None, edit_idx=None, edit_view=None):
-        super().__init__()
+        super().__init__(title=_T("eb.pulsante_ruolo"))
         self.btn_view = btn_view
         self.role = role
         self.edit_idx = edit_idx
@@ -555,7 +564,7 @@ class ButtonOptionModal(discord.ui.Modal, title="Pulsante ruolo"):
         default_color = _STYLE_LABELS.get(existing.get("style"), "grigio").lower() if existing else "grigio"
         self.etichetta = discord.ui.TextInput(label="Etichetta", default=default_label,
                                               required=False, max_length=80)
-        self.emoji = discord.ui.TextInput(label="Emoji (opzionale)", required=False, max_length=100,
+        self.emoji = discord.ui.TextInput(label=_T("eb.emoji_opzionale"), required=False, max_length=100,
                                           default=existing.get("emoji", ""), placeholder="😀  oppure  <:nome:id>")
         self.colore = discord.ui.TextInput(label="Colore: blu / grigio / verde / rosso", required=False,
                                            max_length=10, default=default_color)
@@ -585,7 +594,7 @@ class ButtonOptionModal(discord.ui.Modal, title="Pulsante ruolo"):
 # — modifica di un singolo pulsante —
 class ButtonRoleSelect(discord.ui.RoleSelect):
     def __init__(self, idx):
-        super().__init__(placeholder="🔄 Cambia il ruolo di questo pulsante…",
+        super().__init__(placeholder=_T("eb.cambia_ruolo_questo_pulsante"),
                          min_values=1, max_values=1, row=0)
         self.idx = idx
 
@@ -606,7 +615,7 @@ class ButtonTextButton(discord.ui.Button):
 
 class ButtonRemoveButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="🗑️ Rimuovi pulsante", style=discord.ButtonStyle.danger, row=1)
+        super().__init__(label=_T("eb.rimuovi_pulsante"), style=discord.ButtonStyle.danger, row=1)
 
     async def callback(self, interaction):
         v = self.view
@@ -641,22 +650,22 @@ class ButtonEditView(discord.ui.View):
 
     def render(self):
         b = self.btn_view.buttons[self.idx]
-        return (f"✏️ **Modifica pulsante {self.idx + 1}**\n"
-                f"• Etichetta: **{b.get('label') or '—'}**\n"
-                f"• Emoji: {b.get('emoji') or '—'}\n"
-                f"• Colore: {_STYLE_LABELS.get(b.get('style'))}\n"
-                f"• Ruolo: <@&{b.get('role')}>\n\n"
-                "Cambia il ruolo col menu, o modifica testo/colore col pulsante.")
+        return (f"✏️ **Modifica pulsante {self.idx + 1}**\n" +
+                f"• Etichetta: **{b.get('label') or '—'}**\n" +
+                f"• Emoji: {b.get('emoji') or '—'}\n" +
+                f"• Colore: {_STYLE_LABELS.get(b.get('style'))}\n" +
+                f"• Ruolo: <@&{b.get('role')}>\n\n" +
+                _T("eb.cambia_ruolo_col_menu_o"))
 
 
 # — aggiunta pulsante / scelta pulsante da modificare —
 class ButtonAddRoleSelect(discord.ui.RoleSelect):
     def __init__(self):
-        super().__init__(placeholder="➕ Aggiungi un ruolo come pulsante…", min_values=1, max_values=1, row=0)
+        super().__init__(placeholder=_T("eb.aggiungi_ruolo_come_pulsante"), min_values=1, max_values=1, row=0)
 
     async def callback(self, interaction):
         if len(self.view.buttons) >= 5:
-            return await interaction.response.send_message("❌ Massimo 5 pulsanti per gruppo.", ephemeral=True)
+            return await interaction.response.send_message(_T("eb.massimo_5_pulsanti_gruppo"), ephemeral=True)
         await interaction.response.send_modal(ButtonOptionModal(self.view, role=self.values[0]))
 
 
@@ -668,7 +677,7 @@ class ButtonPickSelect(discord.ui.Select):
             em = (b.get("emoji") + " ") if b.get("emoji") else ""
             label = (b.get("label") or "pulsante")[:80]
             options.append(discord.SelectOption(label=f"{i + 1}. {em}{label}"[:100], value=str(i)))
-        super().__init__(placeholder="✏️ Modifica un pulsante esistente…", options=options, row=1)
+        super().__init__(placeholder=_T("eb.modifica_pulsante_esistente"), options=options, row=1)
 
     async def callback(self, interaction):
         v = ButtonEditView(self.btn_view, int(self.values[0]))
@@ -678,12 +687,12 @@ class ButtonPickSelect(discord.ui.Select):
 
 class ButtonSaveButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="✅ Salva pulsanti", style=discord.ButtonStyle.success, row=2)
+        super().__init__(label=_T("eb.salva_pulsanti"), style=discord.ButtonStyle.success, row=2)
 
     async def callback(self, interaction):
         v = self.view
         if not v.buttons:
-            return await interaction.response.send_message("❌ Aggiungi almeno un pulsante.", ephemeral=True)
+            return await interaction.response.send_message(_T("eb.aggiungi_almeno_pulsante"), ephemeral=True)
         comp = {"type": "buttons", "buttons": v.buttons}
         comps = v.builder.data.setdefault("components", [])
         if v.edit_index is not None and 0 <= v.edit_index < len(comps):
@@ -692,7 +701,7 @@ class ButtonSaveButton(discord.ui.Button):
             comps.append(comp)
         db.save_embed(v.builder.guild.id, v.builder.name, v.builder.data)
         await v.builder.update_message()
-        await interaction.response.edit_message(content="✅ Pulsanti salvati!", view=None)
+        await interaction.response.edit_message(content=_T("eb.pulsanti_salvati"), view=None)
         v.stop()
 
 
@@ -722,12 +731,12 @@ class ButtonsBuilderView(discord.ui.View):
         return interaction.user.id == self.builder.author_id
 
     def render(self):
-        titolo = "🔘 **Modifica pulsanti**" if self.edit_index is not None else "🔘 **Nuovi pulsanti**"
+        titolo = _T("eb.modifica_pulsanti") if self.edit_index is not None else "🔘 **Nuovi pulsanti**"
         righe = [f"{titolo} — {len(self.buttons)}/5"]
         for i, b in enumerate(self.buttons):
             em = (b["emoji"] + " ") if b.get("emoji") else ""
             righe.append(f"{i + 1}. {em}{b.get('label') or ''} → <@&{b['role']}> ({_STYLE_LABELS.get(b['style'])})")
-        righe.append("➕ aggiungi · ✏️ modifica un pulsante · poi **Salva pulsanti**.")
+        righe.append(_T("eb.aggiungi_modifica_pulsante_poi_salva"))
         return "\n".join(righe)
 
     async def update(self):
@@ -747,14 +756,14 @@ class ComponentPickSelect(discord.ui.Select):
             else:
                 options.append(discord.SelectOption(
                     label=f"{i + 1}. Pulsanti • {len(c.get('buttons', []))} ruoli", value=str(i), emoji="🔘"))
-        super().__init__(placeholder="Scegli un componente da modificare…",
+        super().__init__(placeholder=_T("eb.scegli_componente_modificare"),
                          options=options or [discord.SelectOption(label="—")], min_values=1, max_values=1)
 
     async def callback(self, interaction):
         idx = int(self.values[0])
         comps = self.builder.data.get("components", [])
         if not (0 <= idx < len(comps)):
-            return await interaction.response.edit_message(content="Componente non trovato.", view=None)
+            return await interaction.response.edit_message(content=_T("eb.componente_non_trovato"), view=None)
         if comps[idx].get("type") == "select":
             v = MenuBuilderView(self.builder, edit_index=idx)
         else:
@@ -776,7 +785,7 @@ class ComponentsManagerView(discord.ui.View):
 # ── VIEW DEL BUILDER ──────────────────────────────────────────────────────────
 class SendChannelSelect(discord.ui.ChannelSelect):
     def __init__(self):
-        super().__init__(placeholder="📤 Scegli il canale dove inviare...",
+        super().__init__(placeholder=_T("eb.scegli_canale_dove_inviare"),
                          channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=2)
 
     async def callback(self, interaction: discord.Interaction):
@@ -789,6 +798,7 @@ class SendChannelSelect(discord.ui.ChannelSelect):
 
 class EmbedBuilderView(discord.ui.View):
     def __init__(self, guild, name, data, author_id):
+        _CTX["config"] = db.get_log_config(guild.id)   # lingua del server
         super().__init__(timeout=600)
         self.guild = guild
         self.name = name
@@ -799,7 +809,7 @@ class EmbedBuilderView(discord.ui.View):
 
     async def interaction_check(self, interaction):
         if interaction.user.id != self.author_id:
-            await interaction.response.send_message("❌ Solo chi ha aperto l'editor può usarlo.", ephemeral=True)
+            await interaction.response.send_message(_T("eb.solo_chi_ha_aperto_l"), ephemeral=True)
             return False
         return True
 
@@ -813,7 +823,7 @@ class EmbedBuilderView(discord.ui.View):
                 parts.append(f"🎭 Menu ({len(c.get('options', []))} ruoli)")
             else:
                 parts.append(f"🔘 Pulsanti ({len(c.get('buttons', []))} ruoli)")
-        return "\n**Componenti ruolo:** " + " · ".join(parts)
+        return _T("eb.n_componenti_ruolo") + " · ".join(parts)
 
     def _content(self):
         return f"✏️ **Editor embed:** `{self.name}`" + self._summary()
@@ -858,25 +868,25 @@ class EmbedBuilderView(discord.ui.View):
     async def images(self, interaction, button):
         await interaction.response.send_modal(ImagesModal(self))
 
-    @discord.ui.button(label="🎭 Menu ruoli", style=discord.ButtonStyle.primary, row=3)
+    @discord.ui.button(label=_T("eb.menu_ruoli"), style=discord.ButtonStyle.primary, row=3)
     async def add_menu(self, interaction, button):
         mv = MenuBuilderView(self)
         await interaction.response.send_message(content=mv.render(), view=mv, ephemeral=True)
         mv.message = await interaction.original_response()
 
-    @discord.ui.button(label="🔘 Pulsanti ruoli", style=discord.ButtonStyle.primary, row=3)
+    @discord.ui.button(label=_T("eb.pulsanti_ruoli"), style=discord.ButtonStyle.primary, row=3)
     async def add_buttons(self, interaction, button):
         bv = ButtonsBuilderView(self)
         await interaction.response.send_message(content=bv.render(), view=bv, ephemeral=True)
         bv.message = await interaction.original_response()
 
-    @discord.ui.button(label="⚙️ Modifica componenti", style=discord.ButtonStyle.secondary, row=3)
+    @discord.ui.button(label=_T("eb.modifica_componenti"), style=discord.ButtonStyle.secondary, row=3)
     async def manage_components(self, interaction, button):
         if not self.data.get("components"):
             return await interaction.response.send_message(
-                "Nessun componente. Aggiungine uno con 🎭 o 🔘.", ephemeral=True)
+                _T("eb.nessun_componente_aggiungine_uno_o"), ephemeral=True)
         await interaction.response.send_message(
-            "Scegli il componente da modificare o eliminare:",
+            _T("eb.scegli_componente_modificare_o_eliminare"),
             view=ComponentsManagerView(self), ephemeral=True)
 
 
@@ -884,7 +894,7 @@ class EmbedBuilderView(discord.ui.View):
 class EditSelect(discord.ui.Select):
     def __init__(self, names):
         options = [discord.SelectOption(label=n) for n in names[:25]]
-        super().__init__(placeholder="Scegli l'embed da modificare...", options=options)
+        super().__init__(placeholder=_T("eb.scegli_l_embed_modificare"), options=options)
 
     async def callback(self, interaction: discord.Interaction):
         nome = self.values[0]
@@ -917,11 +927,11 @@ class EmbedBuilder(commands.Cog):
 
     gruppo = app_commands.Group(
         name="embed",
-        description="Crea e gestisci embed personalizzati",
+        description=_T("eb.create_and_manage_custom_embeds"),
         default_permissions=discord.Permissions(manage_guild=True),
     )
 
-    @gruppo.command(name="create", description="Crea un nuovo embed e aprilo nell'editor")
+    @gruppo.command(name="create", description=_T("eb.create_new_embed_and_open"))
     @app_commands.checks.has_permissions(manage_guild=True)
     async def create(self, interaction: discord.Interaction, nome: str):
         if db.get_embed(interaction.guild_id, nome) is not None:
@@ -937,29 +947,29 @@ class EmbedBuilder(commands.Cog):
             view=view, ephemeral=True)
         view.message = await interaction.original_response()
 
-    @gruppo.command(name="edit", description="Modifica un embed esistente (scegli dalla lista)")
+    @gruppo.command(name="edit", description="Edit an existing embed (pick from the list)")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def edit(self, interaction: discord.Interaction):
         names = db.list_embeds(interaction.guild_id)
         if not names:
             await interaction.response.send_message(
-                "❌ Nessun embed salvato. Creane uno con `/embed create`.", ephemeral=True)
+                _T("eb.nessun_embed_salvato_creane_uno"), ephemeral=True)
             return
         view = EditSelectView(names, interaction.user.id)
-        await interaction.response.send_message("Quale embed vuoi modificare?", view=view, ephemeral=True)
+        await interaction.response.send_message(_T("eb.quale_embed_vuoi_modificare"), view=view, ephemeral=True)
 
-    @gruppo.command(name="list", description="Mostra gli embed salvati")
+    @gruppo.command(name="list", description="Show the saved embeds")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def list(self, interaction: discord.Interaction):
         names = db.list_embeds(interaction.guild_id)
         if not names:
-            await interaction.response.send_message("❌ Nessun embed salvato.", ephemeral=True)
+            await interaction.response.send_message(_T("eb.nessun_embed_salvato"), ephemeral=True)
             return
-        embed = discord.Embed(title="📋 Embed salvati", color=0x5865F2,
+        embed = discord.Embed(title=_T("eb.embed_salvati"), color=0x5865F2,
                               description="\n".join(f"• `{n}`" for n in names))
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @gruppo.command(name="delete", description="Elimina un embed salvato")
+    @gruppo.command(name="delete", description="Delete a saved embed")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def delete(self, interaction: discord.Interaction, nome: str):
         if db.delete_embed(interaction.guild_id, nome):
@@ -967,7 +977,7 @@ class EmbedBuilder(commands.Cog):
         else:
             await interaction.response.send_message(f"❌ Nessun embed chiamato `{nome}`.", ephemeral=True)
 
-    @gruppo.command(name="send", description="Invia un embed salvato in un canale")
+    @gruppo.command(name="send", description="Send a saved embed to a channel")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def send(self, interaction: discord.Interaction, nome: str, canale: discord.TextChannel = None):
         data = db.get_embed(interaction.guild_id, nome)

@@ -1,76 +1,76 @@
 import discord
 from discord.ext import commands
 
+import database as db
+from locales import t
+
 ORO = 0xF1C40F
 
-TITOLO = "📖 Comandi Kitsune"
-INTRO = (
-    "Ecco la lista dei comandi disponibili.\n"
-    "Usa il prefix, slash o context menu in base al comando.\n"
-    "Mini-help rapido: `+help <comando>`."
-)
+TITOLO = "help.comandi_kitsune"
+INTRO = "help.intro"
 
 # Pagine: ogni pagina è una lista di (categoria, [(etichetta, descrizione), ...])
 PAGINE = [
     [
-        ("Utility", [
-            ("`+av` | `+avuser`", "Avatar del server / del profilo di un utente."),
-            ("`+banner` | `+banneruser`", "Banner del server / del profilo di un utente."),
-            ("`+quote`", "Rispondi a un messaggio e scrivi `+quote` per farne una citazione."),
-            ("`+profile`", "Apri il tuo profilo: privacy, ruoli, custom reactions."),
-            ("`+help`", "Mostra questa lista (o `+help <comando>` per i dettagli)."),
+        ("help.utility", [
+            ("`+av` | `+avuser`", "help.avatar_server_profilo_utente"),
+            ("`+banner` | `+banneruser`", "help.banner_server_profilo_utente"),
+            ("`+quote`", "help.rispondi_messaggio_scrivi_quote_farne"),
+            ("`+profile`", "help.apri_tuo_profilo_privacy_ruoli"),
+            ("`+help`", "help.mostra_questa_lista_help_comando"),
         ]),
-        ("Minigiochi", [
-            ("`+rps <sasso/carta/forbice>`", "Sasso carta forbice contro il bot."),
-            ("`+ship @utente1 <@utente2>`", "Compatibilità amorosa tra due utenti."),
-            ("`+8ball <domanda>`", "Fai una domanda alla palla magica."),
-            ("`+moneta <testa/croce>`", "Scegli e lancia la moneta."),
-            ("`+indovina`", "Indovina il numero tra 1 e 100 (`+tentativo <n>`)."),
-            ("`+marriage <@utente>`", "Mostra con chi sei sposato/a (dura 24h)."),
+        ("help.minigiochi", [
+            ("`+rps <sasso/carta/forbice>`", "help.sasso_carta_forbice_contro_bot"),
+            ("`+ship @utente1 <@utente2>`", "help.compatibilita_amorosa_tra_due_utenti"),
+            ("`+8ball <domanda>`", "help.fai_domanda_alla_palla_magica"),
+            ("`+moneta <testa/croce>`", "help.scegli_lancia_moneta"),
+            ("`+indovina`", "help.indovina_numero_tra_1_100"),
+            ("`+marriage <@utente>`", "help.mostra_chi_sei_sposato_dura"),
         ]),
-        ("Level", [
-            ("`+rank` | `+r`", "Mostra il tuo livello (o altrui) e la posizione in classifica."),
-            ("`+leaderboard` | `+lb`", "Classifica livelli del server (top 10)."),
+        ("help.level", [
+            ("`+rank` | `+r`", "help.mostra_tuo_livello_altrui_posizione"),
+            ("`+leaderboard` | `+lb`", "help.classifica_livelli_server_top_10"),
         ]),
     ],
 ]
 
 # Dettaglio per +help <comando>
 DETTAGLI = {
-    "av": ("`+av <@utente>`", "Mostra l'avatar che hai (o un altro utente) nel server."),
-    "avuser": ("`+avuser <@utente>`", "Mostra l'avatar del profilo (globale)."),
-    "banner": ("`+banner <@utente>`", "Mostra il banner del server o, se non c'è, del profilo."),
-    "banneruser": ("`+banneruser <@utente>`", "Mostra il banner del profilo (globale)."),
-    "quote": ("`+quote` (in risposta)", "Rispondi a un messaggio con `+quote` per trasformarlo in citazione."),
-    "profile": ("`+profile <@utente>`", "Apri il tuo profilo (privacy avatar/banner/quote, vocale privata, custom reactions). Con un tag mostri la home di un altro."),
-    "profilo": ("`+profilo <@utente>`", "Alias di `+profile`: apri il tuo profilo."),
-    "help": ("`+help [comando]`", "Mostra tutti i comandi, o i dettagli di uno specifico."),
-    "rps": ("`+rps <sasso/carta/forbice>`", "Sasso carta forbice contro il bot."),
-    "ship": ("`+ship @utente1 <@utente2>`", "Compatibilità amorosa tra due utenti (taggane 1 o 2)."),
-    "8ball": ("`+8ball <domanda>`", "Fai una domanda alla palla magica."),
-    "moneta": ("`+moneta <testa/croce>`", "Scegli testa o croce e lancia la moneta."),
-    "indovina": ("`+indovina` / `+tentativo <n>`", "Indovina il numero tra 1 e 100."),
-    "tentativo": ("`+tentativo <numero>`", "Prova a indovinare il numero della partita in corso."),
-    "marriage": ("`+marriage <@utente>`", "Mostra con chi sei sposato/a (dura 24h)."),
-    "rank": ("`+rank` / `+r <@utente>`", "Mostra il tuo livello (o altrui) e la posizione in classifica."),
-    "r": ("`+r <@utente>`", "Alias di `+rank`: il tuo livello (o altrui) e la posizione."),
-    "leaderboard": ("`+leaderboard` / `+lb`", "Classifica livelli del server (top 10)."),
-    "lb": ("`+lb`", "Alias di `+leaderboard`: classifica del server (top 10)."),
+    "av": ("`+av <@utente>`", "help.mostra_l_avatar_hai_altro"),
+    "avuser": ("`+avuser <@utente>`", "help.mostra_l_avatar_profilo_globale"),
+    "banner": ("`+banner <@utente>`", "help.mostra_banner_server_se_non"),
+    "banneruser": ("`+banneruser <@utente>`", "help.mostra_banner_profilo_globale"),
+    "quote": ("`+quote` (in risposta)", "help.rispondi_messaggio_quote_trasformarlo_citazione"),
+    "profile": ("`+profile <@utente>`", "help.apri_tuo_profilo_privacy_avatar"),
+    "profilo": ("`+profilo <@utente>`", "help.alias_profile_apri_tuo_profilo"),
+    "help": ("`+help [comando]`", "help.mostra_tutti_comandi_dettagli_uno"),
+    "rps": ("`+rps <sasso/carta/forbice>`", "help.sasso_carta_forbice_contro_bot"),
+    "ship": ("`+ship @utente1 <@utente2>`", "help.compatibilita_amorosa_tra_due_utenti2"),
+    "8ball": ("`+8ball <domanda>`", "help.fai_domanda_alla_palla_magica"),
+    "moneta": ("`+moneta <testa/croce>`", "help.scegli_testa_croce_lancia_moneta"),
+    "indovina": ("`+indovina` / `+tentativo <n>`", "help.indovina_numero_tra_1_1002"),
+    "tentativo": ("`+tentativo <numero>`", "help.prova_indovinare_numero_partita_corso"),
+    "marriage": ("`+marriage <@utente>`", "help.mostra_chi_sei_sposato_dura"),
+    "rank": ("`+rank` / `+r <@utente>`", "help.mostra_tuo_livello_altrui_posizione"),
+    "r": ("`+r <@utente>`", "help.alias_rank_tuo_livello_altrui"),
+    "leaderboard": ("`+leaderboard` / `+lb`", "help.classifica_livelli_server_top_10"),
+    "lb": ("`+lb`", "help.alias_leaderboard_classifica_server_top"),
 }
 
 
-def _embed_pagina(index: int) -> discord.Embed:
+def _embed_pagina(index: int, config=None) -> discord.Embed:
     # Tutto nella descrizione con markdown: titolo grande (#), categorie (###),
     # e una riga vuota tra un comando e l'altro per dare respiro.
-    parti = [f"# {TITOLO}", "", INTRO, ""]
+    # I testi sono chiavi: si risolvono qui nella lingua del server.
+    parti = [f"# {t(config, TITOLO)}", "", t(config, INTRO), ""]
     for categoria, comandi in PAGINE[index]:
-        parti.append(f"### {categoria}")
-        righe = [f"• {etichetta} — {descr}" for etichetta, descr in comandi]
+        parti.append(f"### {t(config, categoria)}")
+        righe = [f"• {etichetta} — {t(config, descr)}" for etichetta, descr in comandi]
         parti.append("\n\n".join(righe))
         parti.append("")
     embed = discord.Embed(description="\n".join(parti), color=ORO)
     if len(PAGINE) > 1:
-        embed.set_footer(text=f"Pagina {index + 1}/{len(PAGINE)}")
+        embed.set_footer(text=t(config, "help.pagina", n=index + 1, tot=len(PAGINE)))
     return embed
 
 
@@ -89,7 +89,7 @@ class HelpView(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author_id:
             await interaction.response.send_message(
-                "❌ Solo chi ha aperto l'help può sfogliarlo.", ephemeral=True)
+                t(db.get_log_config(interaction.guild_id), "help.only_author"), ephemeral=True)
             return False
         return True
 
@@ -97,13 +97,13 @@ class HelpView(discord.ui.View):
     async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.index = max(0, self.index - 1)
         self._aggiorna()
-        await interaction.response.edit_message(embed=_embed_pagina(self.index), view=self)
+        await interaction.response.edit_message(embed=_embed_pagina(self.index, db.get_log_config(interaction.guild_id)), view=self)
 
     @discord.ui.button(emoji="➡️", style=discord.ButtonStyle.secondary)
     async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.index = min(len(PAGINE) - 1, self.index + 1)
         self._aggiorna()
-        await interaction.response.edit_message(embed=_embed_pagina(self.index), view=self)
+        await interaction.response.edit_message(embed=_embed_pagina(self.index, db.get_log_config(interaction.guild_id)), view=self)
 
     @discord.ui.button(emoji="✖️", style=discord.ButtonStyle.danger)
     async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -128,19 +128,20 @@ class Help(commands.Cog):
 
     @commands.command(name="help")
     async def help_cmd(self, ctx: commands.Context, *, comando: str = None):
+        config = db.get_log_config(ctx.guild.id) if ctx.guild else None
         if comando:
             chiave = comando.strip().lstrip("+").lower()
             d = DETTAGLI.get(chiave)
             if not d:
-                await ctx.send(f"❌ Comando `{comando}` non trovato. Usa `+help` per la lista.")
+                await ctx.send(t(config, "help.non_trovato", cmd=comando))
                 return
             uso, descr = d
-            embed = discord.Embed(title=f"Comando: {chiave}", color=ORO,
-                                  description=f"{uso}\n\n{descr}")
+            embed = discord.Embed(title=t(config, "help.comando_titolo", cmd=chiave), color=ORO,
+                                  description=f"{uso}\n\n{t(config, descr)}")
             await ctx.send(embed=embed)
             return
         view = HelpView(ctx.author.id)
-        view.message = await ctx.send(embed=_embed_pagina(0), view=view)
+        view.message = await ctx.send(embed=_embed_pagina(0, config), view=view)
 
 
 async def setup(bot):

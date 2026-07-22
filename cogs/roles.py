@@ -33,7 +33,7 @@ class Roles(commands.Cog):
 
     gruppo = app_commands.Group(
         name="role",
-        description="Gestione dei ruoli",
+        description="Role management",
         default_permissions=discord.Permissions(manage_roles=True),
     )
 
@@ -48,7 +48,7 @@ class Roles(commands.Cog):
             await interaction.response.send_message(msg, ephemeral=True)
 
     # ── ADD ─────────────────────────────────────────────────────────────────────
-    @gruppo.command(name="add", description="Aggiunge un ruolo a un utente")
+    @gruppo.command(name="add", description="Add a role to a user")
     @app_commands.checks.has_permissions(manage_roles=True)
     async def add(self, interaction: discord.Interaction, utente: discord.Member, ruolo: discord.Role):
         err = _puo_assegnare(interaction, ruolo)
@@ -62,7 +62,7 @@ class Roles(commands.Cog):
         await interaction.response.send_message(_t(interaction, "roles.added", role=ruolo.mention, user=utente.mention))
 
     # ── REMOVE ──────────────────────────────────────────────────────────────────
-    @gruppo.command(name="remove", description="Rimuove un ruolo a un utente")
+    @gruppo.command(name="remove", description="Remove a role from a user")
     @app_commands.checks.has_permissions(manage_roles=True)
     async def remove(self, interaction: discord.Interaction, utente: discord.Member, ruolo: discord.Role):
         err = _puo_assegnare(interaction, ruolo)
@@ -103,25 +103,25 @@ class Roles(commands.Cog):
         await interaction.followup.send(_t(interaction, "roles.mass_done", role=ruolo.mention, verb=verbo, count=count, what=descr))
 
     _AZIONI = [
-        app_commands.Choice(name="Aggiungi", value="add"),
-        app_commands.Choice(name="Rimuovi", value="remove"),
+        app_commands.Choice(name="Add", value="add"),
+        app_commands.Choice(name="Remove", value="remove"),
     ]
 
-    @gruppo.command(name="all", description="Dà (o toglie) un ruolo a TUTTI i membri")
+    @gruppo.command(name="all", description="Give (or remove) a role to ALL members")
     @app_commands.choices(azione=_AZIONI)
     @app_commands.checks.has_permissions(manage_roles=True)
     async def all(self, interaction: discord.Interaction, ruolo: discord.Role,
                   azione: app_commands.Choice[str] = None):
         await self._massa(interaction, ruolo, azione, lambda m: True, "membri")
 
-    @gruppo.command(name="humans", description="Dà (o toglie) un ruolo solo agli utenti (no bot)")
+    @gruppo.command(name="humans", description="Give (or remove) a role to humans only (no bots)")
     @app_commands.choices(azione=_AZIONI)
     @app_commands.checks.has_permissions(manage_roles=True)
     async def humans(self, interaction: discord.Interaction, ruolo: discord.Role,
                      azione: app_commands.Choice[str] = None):
         await self._massa(interaction, ruolo, azione, lambda m: not m.bot, "utenti")
 
-    @gruppo.command(name="bots", description="Dà (o toglie) un ruolo solo ai bot")
+    @gruppo.command(name="bots", description="Give (or remove) a role to bots only")
     @app_commands.choices(azione=_AZIONI)
     @app_commands.checks.has_permissions(manage_roles=True)
     async def bots(self, interaction: discord.Interaction, ruolo: discord.Role,

@@ -217,7 +217,7 @@ class Moderation(commands.Cog):
             await interaction.response.send_message(msg, ephemeral=True)
 
     # ── BAN ──────────────────────────────────────────────────────────────────
-    @app_commands.command(name="ban", description="Banna un utente dal server")
+    @app_commands.command(name="ban", description="Ban a user from the server")
     @app_commands.default_permissions(ban_members=True)
     @app_commands.checks.has_permissions(ban_members=True)
     async def ban(
@@ -273,7 +273,7 @@ class Moderation(commands.Cog):
             db.add_temp_ban(interaction.guild_id, membro.id, scadenza, durata)
 
     # ── HACK BAN ──────────────────────────────────────────────────────────────
-    @app_commands.command(name="hackban", description="Banna un utente tramite ID (anche se non è nel server)")
+    @app_commands.command(name="hackban", description="Ban a user by ID (even if they're not in the server)")
     @app_commands.default_permissions(ban_members=True)
     @app_commands.checks.has_permissions(ban_members=True)
     async def hackban(
@@ -302,7 +302,7 @@ class Moderation(commands.Cog):
             await interaction.followup.send(_t(interaction, "mod.error", error=e), ephemeral=True)
 
     # ── UNBAN ─────────────────────────────────────────────────────────────────
-    @app_commands.command(name="unban", description="Rimuove il ban a un utente")
+    @app_commands.command(name="unban", description="Unban a user")
     @app_commands.default_permissions(ban_members=True)
     @app_commands.checks.has_permissions(ban_members=True)
     async def unban(
@@ -330,7 +330,7 @@ class Moderation(commands.Cog):
             await interaction.followup.send(_t(interaction, "mod.user_not_banned"), ephemeral=True)
 
     # ── KICK ──────────────────────────────────────────────────────────────────
-    @app_commands.command(name="kick", description="Kicka un utente dal server")
+    @app_commands.command(name="kick", description="Kick a user from the server")
     @app_commands.default_permissions(kick_members=True)
     @app_commands.checks.has_permissions(kick_members=True)
     async def kick(
@@ -356,7 +356,7 @@ class Moderation(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     # ── TIMEOUT ───────────────────────────────────────────────────────────────
-    @app_commands.command(name="timeout", description="Mette in timeout un utente")
+    @app_commands.command(name="timeout", description="Time a user out")
     @app_commands.default_permissions(moderate_members=True)
     @app_commands.checks.has_permissions(moderate_members=True)
     async def timeout(
@@ -396,7 +396,7 @@ class Moderation(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     # ── UNTIMEOUT ─────────────────────────────────────────────────────────────
-    @app_commands.command(name="untimeout", description="Rimuove il timeout a un utente")
+    @app_commands.command(name="untimeout", description="Remove a user's timeout")
     @app_commands.default_permissions(moderate_members=True)
     @app_commands.checks.has_permissions(moderate_members=True)
     async def untimeout(self, interaction: discord.Interaction, membro: discord.Member):
@@ -408,20 +408,20 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     # ── SLOWMODE ──────────────────────────────────────────────────────────────
-    @app_commands.command(name="slowmode", description="Imposta il slowmode nel canale")
+    @app_commands.command(name="slowmode", description="Set the channel slowmode")
     @app_commands.default_permissions(manage_channels=True)
     @app_commands.checks.has_permissions(manage_channels=True)
     @app_commands.choices(preset=[
-        app_commands.Choice(name="🚫 Disattiva", value=0),
-        app_commands.Choice(name="1 minuto", value=60),
-        app_commands.Choice(name="5 minuti", value=300),
-        app_commands.Choice(name="10 minuti", value=600),
-        app_commands.Choice(name="15 minuti", value=900),
-        app_commands.Choice(name="30 minuti", value=1800),
-        app_commands.Choice(name="1 ora", value=3600),
-        app_commands.Choice(name="2 ore", value=7200),
-        app_commands.Choice(name="3 ore", value=10800),
-        app_commands.Choice(name="6 ore", value=21600),
+        app_commands.Choice(name="🚫 Disable", value=0),
+        app_commands.Choice(name="1 minute", value=60),
+        app_commands.Choice(name="5 minutes", value=300),
+        app_commands.Choice(name="10 minutes", value=600),
+        app_commands.Choice(name="15 minutes", value=900),
+        app_commands.Choice(name="30 minutes", value=1800),
+        app_commands.Choice(name="1 hour", value=3600),
+        app_commands.Choice(name="2 hours", value=7200),
+        app_commands.Choice(name="3 hours", value=10800),
+        app_commands.Choice(name="6 hours", value=21600),
     ])
     async def slowmode(
         self,
@@ -444,7 +444,7 @@ class Moderation(commands.Cog):
             await interaction.response.send_message(_t(interaction, "mod.slowmode_set", value=format_seconds(secondi)))
 
     # ── CLEAR ─────────────────────────────────────────────────────────────────
-    @app_commands.command(name="clear", description="Cancella messaggi dal canale con filtri opzionali")
+    @app_commands.command(name="clear", description="Delete messages from the channel with optional filters")
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.checks.has_permissions(manage_messages=True)
     async def clear(
@@ -480,7 +480,7 @@ class Moderation(commands.Cog):
 
 
     # ── BANLIST ───────────────────────────────────────────────────────────────
-    @app_commands.command(name="banlist", description="Mostra la lista degli utenti bannati dal server")
+    @app_commands.command(name="banlist", description="Show the list of users banned from the server")
     @app_commands.default_permissions(ban_members=True)
     @app_commands.checks.has_permissions(ban_members=True)
     async def banlist(self, interaction: discord.Interaction):
@@ -496,7 +496,7 @@ class Moderation(commands.Cog):
         await interaction.followup.send(embed=view.crea_embed(), view=view, ephemeral=True)
 
     # ── WARN ──────────────────────────────────────────────────────────────────
-    @app_commands.command(name="warn", description="Avvisa un utente (con motivo e prove opzionali)")
+    @app_commands.command(name="warn", description="Warn a user (with optional reason and proof)")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("warn")
     async def warn(
@@ -551,7 +551,7 @@ class Moderation(commands.Cog):
             pass
 
     # ── WARNINGS ──────────────────────────────────────────────────────────────
-    @app_commands.command(name="warnings", description="Mostra i warn di un utente")
+    @app_commands.command(name="warnings", description="Show a user's warns")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("warn")
     async def warnings(self, interaction: discord.Interaction, membro: discord.Member):
@@ -576,7 +576,7 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # ── DELWARN ───────────────────────────────────────────────────────────────
-    @app_commands.command(name="delwarn", description="Rimuove un warn tramite il suo ID")
+    @app_commands.command(name="delwarn", description="Remove a warn by its ID")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("warn")
     async def delwarn(self, interaction: discord.Interaction, warn_id: int):
@@ -586,7 +586,7 @@ class Moderation(commands.Cog):
             await interaction.response.send_message(_t(interaction, "mod.warn_not_found", id=warn_id), ephemeral=True)
 
     # ── CLEARWARNS ────────────────────────────────────────────────────────────
-    @app_commands.command(name="clearwarns", description="Cancella tutti i warn di un utente")
+    @app_commands.command(name="clearwarns", description="Clear all of a user's warns")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("warn")
     async def clearwarns(self, interaction: discord.Interaction, membro: discord.Member):
@@ -622,7 +622,7 @@ class Moderation(commands.Cog):
         return None
 
     # ── LOCK ──────────────────────────────────────────────────────────────────
-    @app_commands.command(name="lock", description="Blocca un canale (nessuno può più scrivere)")
+    @app_commands.command(name="lock", description="Lock a channel (nobody can write anymore)")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("lock")
     async def lock(self, interaction: discord.Interaction,
@@ -639,7 +639,7 @@ class Moderation(commands.Cog):
         await self._lock_log(interaction, canale, "🔒 Channel Locked", "locked", motivo)
 
     # ── UNLOCK ────────────────────────────────────────────────────────────────
-    @app_commands.command(name="unlock", description="Sblocca un canale precedentemente bloccato")
+    @app_commands.command(name="unlock", description="Unlock a previously locked channel")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("lock")
     async def unlock(self, interaction: discord.Interaction,
@@ -667,7 +667,7 @@ class Moderation(commands.Cog):
         await logs_cog._send(interaction.guild, "modlogs", "lock", e, source_channel_id=canale.id)
 
     # ── JAIL ──────────────────────────────────────────────────────────────────
-    @app_commands.command(name="jail", description="Mette un utente in jail (vede solo il canale jail)")
+    @app_commands.command(name="jail", description="Jail a user (they only see the jail channel)")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("jail")
     async def jail(self, interaction: discord.Interaction, membro: discord.Member,
@@ -721,7 +721,7 @@ class Moderation(commands.Cog):
         await self._jail_log(interaction.guild, log)
 
     # ── UNJAIL ────────────────────────────────────────────────────────────────
-    @app_commands.command(name="unjail", description="Toglie un utente dal jail e ripristina i suoi ruoli")
+    @app_commands.command(name="unjail", description="Unjail a user and restore their roles")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("jail")
     async def unjail(self, interaction: discord.Interaction, membro: discord.Member):
@@ -767,7 +767,7 @@ class Moderation(commands.Cog):
                     pass
 
     # ── JAILED (lista) ──────────────────────────────────────────────────────────
-    @app_commands.command(name="jailed", description="Mostra gli utenti attualmente in jail")
+    @app_commands.command(name="jailed", description="Show the currently jailed users")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("jail")
     async def jailed(self, interaction: discord.Interaction):
@@ -806,7 +806,7 @@ class Moderation(commands.Cog):
                 pass
 
     # ── SERVERINFO ────────────────────────────────────────────────────────────
-    @app_commands.command(name="serverinfo", description="Mostra le informazioni del server")
+    @app_commands.command(name="serverinfo", description="Show the server information")
     @app_commands.default_permissions(administrator=True)
     @app_commands.checks.has_permissions(administrator=True)
     async def serverinfo(self, interaction: discord.Interaction):
@@ -840,7 +840,7 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     # ── USERINFO ──────────────────────────────────────────────────────────────
-    @app_commands.command(name="userinfo", description="Mostra le informazioni di un utente")
+    @app_commands.command(name="userinfo", description="Show a user's information")
     @app_commands.default_permissions(administrator=True)
     @app_commands.checks.has_permissions(administrator=True)
     async def userinfo(self, interaction: discord.Interaction, membro: discord.Member = None):

@@ -61,7 +61,7 @@ class Confession(commands.Cog):
         self.bot = bot
         self.last_msg = {}  # guild_id -> ultimo messaggio confessione (per spostare il pulsante)
 
-    gruppo = app_commands.Group(name="confession", description="Sistema di confessioni anonime")
+    gruppo = app_commands.Group(name="confession", description="Anonymous confession system")
 
     async def cog_app_command_error(self, interaction, error):
         if isinstance(error, logconfig.FeatureDisabled):
@@ -75,7 +75,7 @@ class Confession(commands.Cog):
         else:
             await interaction.response.send_message(msg, ephemeral=True)
 
-    @gruppo.command(name="write", description="Scrivi una confessione anonima")
+    @gruppo.command(name="write", description="Write an anonymous confession")
     @logconfig.feature_check("confession")
     async def write(self, interaction: discord.Interaction):
         config = db.get_config(interaction.guild_id)

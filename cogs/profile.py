@@ -3,6 +3,16 @@ from discord.ext import commands
 
 import database as db
 import logconfig
+from locales import t
+
+
+def _T(key: str, **kwargs) -> str:
+    """Testo nella lingua del server corrente."""
+    return t(_CTX.get("config"), key, **kwargs)
+
+
+_CTX = {}
+
 
 BLU = 0x5865F2
 PRIVACY_KINDS = ("avatar", "banner", "quote")
@@ -44,7 +54,7 @@ def _bool_label(blocked: bool) -> str:
 
 def _custom_emojis_line(member, guild, config) -> str:
     if not logconfig.custom_react_allowed(config, member):
-        return "Non abilitate"
+        return _T("prof.non_abilitate")
     r = logconfig.mention_rule_for(config, member.id)
     emojis = r.get("emojis", []) if r else []
     return " ".join(emojis) if emojis else "Non impostate"
@@ -52,10 +62,11 @@ def _custom_emojis_line(member, guild, config) -> str:
 
 def build_home_embed(member: discord.Member, guild: discord.Guild,
                      config: dict, prof: dict) -> discord.Embed:
+    _CTX["config"] = config          # può essere chiamata anche senza una view
     e = discord.Embed(
         title=f"🪪 Profilo di {member.display_name}",
-        description="⭐ Mini guida per configurare il tuo profilo e le funzioni del bot.\n"
-                    "Usa il menu a tendina qui sotto per spostarti tra le sezioni.",
+        description=_T("prof.mini_guida_configurare_tuo_profilo") +
+                    _T("prof.usa_menu_tendina_qui_sotto"),
         color=member.color if member.color.value else BLU,
     )
     e.set_thumbnail(url=member.display_avatar.url)
@@ -63,14 +74,14 @@ def build_home_embed(member: discord.Member, guild: discord.Guild,
     # Ruolo primario (lo assegni tu dalla dashboard)
     prid = logconfig.primary_role_of(config, member.id)
     role = guild.get_role(prid) if prid else None
-    e.add_field(name="🏅 Ruolo primario",
+    e.add_field(name=_T("prof.ruolo_primario"),
                 value=role.mention if role else "Nessuno", inline=False)
 
     pv = _privacy(prof)
     e.add_field(
-        name="🔒 Privacy",
-        value=(f"**Avatar:** {_bool_label(pv.get('avatar', False))}\n"
-               f"**Banner:** {_bool_label(pv.get('banner', False))}\n"
+        name=_T("prof.privacy"),
+        value=(f"**Avatar:** {_bool_label(pv.get('avatar', False))}\n" +
+               f"**Banner:** {_bool_label(pv.get('banner', False))}\n" +
                f"**Quote:** {_bool_label(pv.get('quote', False))}"),
         inline=False,
     )
@@ -79,7 +90,7 @@ def build_home_embed(member: discord.Member, guild: discord.Guild,
     vid = logconfig.private_voice_of(config, member.id)
     ch = guild.get_channel(vid) if vid else None
     e.add_field(name="🔊 Vocale Privata",
-                value=ch.mention if ch else "Nessuna vocale", inline=False)
+                value=ch.mention if ch else _T("prof.nessuna_vocale"), inline=False)
 
     e.add_field(name="⭐ Custom Reactions",
                 value=_custom_emojis_line(member, guild, config), inline=False)
@@ -138,6 +149,7 @@ class _ProfileBase(discord.ui.View):
         self.guild = guild
         self.member = member
         config = db.get_log_config(guild.id)
+        _CTX["config"] = config          # lingua del server per i componenti
         show_react = logconfig.custom_react_allowed(config, member)
         show_roles = bool(logconfig.role_categories(config))
         self.add_item(SectionSelect(current, show_react, show_roles))
@@ -145,7 +157,7 @@ class _ProfileBase(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author_id:
             await interaction.response.send_message(
-                "❌ Solo chi ha aperto il profilo può usarlo.", ephemeral=True)
+                _T("prof.solo_chi_ha_aperto_profilo"), ephemeral=True)
             return False
         return True
 
@@ -238,9 +250,9 @@ class PrivacyView(_ProfileBase):
         pv = self._privacy()
         notify = self._prof().get("notify", True)
         e = discord.Embed(
-            title="🔒 Privacy",
-            description="Gestisci chi può vedere il tuo **avatar/banner** e **citarti** (quote).\n"
-                        "🟢 Visibile = tutti · 🔴 Bloccato = solo tu (e i ruoli staff abilitati).",
+            title=_T("prof.privacy"),
+            description=_T("prof.gestisci_chi_puo_vedere_tuo") +
+                        _T("prof.visibile_tutti_bloccato_solo_tu"),
             color=self.member.color if self.member.color.value else BLU,
         )
         e.add_field(name="Avatar", value=_bool_label(pv.get("avatar", False)))
@@ -248,8 +260,8 @@ class PrivacyView(_ProfileBase):
         e.add_field(name="Quote", value=_bool_label(pv.get("quote", False)))
         e.add_field(
             name="🔔 Notifica",
-            value=("Avviso chi prova ad aprire una cosa bloccata."
-                   if notify else "Nessun avviso a chi ci prova."),
+            value=(_T("prof.avviso_chi_prova_ad_aprire")
+                   if notify else _T("prof.nessun_avviso_chi_ci_prova")),
             inline=False,
         )
         e.set_footer(text="Kitsune • Profilo")
@@ -319,7 +331,7 @@ class ReactPageButton(discord.ui.Button):
         await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
 
 
-class ReactManualModal(discord.ui.Modal, title="Emoji a mano"):
+class ReactManualModal(discord.ui.Modal, title=_T("prof.emoji_mano")):
     def __init__(self, author_id, guild, member, maxn):
         super().__init__()
         self.author_id = author_id
@@ -344,7 +356,7 @@ class ReactManualModal(discord.ui.Modal, title="Emoji a mano"):
 
 class ReactManualButton(discord.ui.Button):
     def __init__(self, maxn):
-        super().__init__(label="🔤 Emoji a mano", style=discord.ButtonStyle.secondary, row=2)
+        super().__init__(label=_T("prof.emoji_mano2"), style=discord.ButtonStyle.secondary, row=2)
         self.maxn = maxn
 
     async def callback(self, interaction: discord.Interaction):
@@ -371,7 +383,7 @@ class ReactModeButton(discord.ui.Button):
 
 class ReactClearButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="🗑️ Rimuovi", style=discord.ButtonStyle.secondary, row=2)
+        super().__init__(label=_T("prof.rimuovi"), style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         v = self.view
@@ -394,8 +406,8 @@ class ReactView(_ProfileBase):
             if guild.emojis:
                 self.add_item(ReactServerEmojiSelect(guild, cur, maxn, emoji_page))
                 if len(guild.emojis) > 25:
-                    self.add_item(ReactPageButton(-1, "◀ Emoji"))
-                    self.add_item(ReactPageButton(1, "Emoji ▶"))
+                    self.add_item(ReactPageButton(-1, _T("prof.emoji2")))
+                    self.add_item(ReactPageButton(1, _T("prof.emoji")))
             self.add_item(ReactManualButton(maxn))
             self.add_item(ReactModeButton(r.get("mode", "contains")))
             self.add_item(ReactClearButton())
@@ -407,21 +419,21 @@ class ReactView(_ProfileBase):
         e = discord.Embed(title="⭐ Custom Reactions",
                           color=self.member.color if self.member.color.value else BLU)
         if not allowed:
-            e.description = ("Non sei abilitato alle custom reactions.\n"
-                            "È un permesso che assegna lo staff dalla dashboard.")
+            e.description = (_T("prof.non_sei_abilitato_alle_custom") +
+                            _T("prof.permesso_assegna_staff_dalla_dashboard"))
             e.set_footer(text="Kitsune • Profilo")
             return e
         r = logconfig.mention_rule_for(config, self.member.id) or {}
         emojis = r.get("emojis", [])
         maxn = logconfig.custom_react_max(config)
-        modo = ("solo quando il tag è da solo" if r.get("mode") == "exact"
-                else "anche se taggato dentro una frase")
+        modo = (_T("prof.solo_quando_tag_solo") if r.get("mode") == "exact"
+                else _T("prof.anche_se_taggato_dentro_frase"))
         e.description = (
-            f"Il bot reagisce **quando vieni taggato** con le emoji che scegli (max **{maxn}**).\n\n"
-            f"**Le tue emoji:** {' '.join(emojis) if emojis else 'Nessuna'}\n"
+            f"Il bot reagisce **quando vieni taggato** con le emoji che scegli (max **{maxn}**).\n\n" +
+            f"**Le tue emoji:** {' '.join(emojis) if emojis else 'Nessuna'}\n" +
             f"**Modalità:** {modo}"
         )
-        e.set_footer(text="Emoji dal menu (server) oppure 'Emoji a mano' per unicode/altre.")
+        e.set_footer(text=_T("prof.emoji_dal_menu_server_oppure"))
         return e
 
 
@@ -447,7 +459,7 @@ class RoleCategoryPicker(discord.ui.Select):
                 label=c.get("name", "Categoria")[:100], value=cid,
                 description="Scelta singola" if c.get("single") else "Scelta multipla",
                 emoji=_safe_emoji(c.get("emoji")), default=(cid == current)))
-        super().__init__(placeholder="Scegli una categoria...", options=options, row=1)
+        super().__init__(placeholder=_T("prof.scegli_categoria"), options=options, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         v = self.view
@@ -489,9 +501,9 @@ class RoleOptionSelect(discord.ui.Select):
                 remove.append(role)
         try:
             if add:
-                await v.member.add_roles(*add, reason="+profile ruoli")
+                await v.member.add_roles(*add, reason=_T("prof.profile_ruoli"))
             if remove:
-                await v.member.remove_roles(*remove, reason="+profile ruoli")
+                await v.member.remove_roles(*remove, reason=_T("prof.profile_ruoli"))
         except discord.HTTPException:
             pass
         nv = RolesView(v.author_id, v.guild, v.member, self.cat_id)
@@ -500,7 +512,7 @@ class RoleOptionSelect(discord.ui.Select):
 
 class RoleClearButton(discord.ui.Button):
     def __init__(self, cat_id):
-        super().__init__(label="Rimuovi ruoli", emoji="🗑️",
+        super().__init__(label=_T("prof.rimuovi_ruoli"), emoji="🗑️",
                          style=discord.ButtonStyle.secondary, row=3)
         self.cat_id = cat_id
 
@@ -511,7 +523,7 @@ class RoleClearButton(discord.ui.Button):
                   if r and r in v.member.roles and _assignable(v.guild, r)]
         if remove:
             try:
-                await v.member.remove_roles(*remove, reason="+profile rimuovi ruoli")
+                await v.member.remove_roles(*remove, reason=_T("prof.profile_rimuovi_ruoli"))
             except discord.HTTPException:
                 pass
         nv = RolesView(v.author_id, v.guild, v.member, self.cat_id)
@@ -536,19 +548,19 @@ class RolesView(_ProfileBase):
 
     def build_embed(self):
         cats = logconfig.role_categories(self._config())
-        e = discord.Embed(title="🎭 Ruoli",
+        e = discord.Embed(title=_T("prof.ruoli"),
                           color=self.member.color if self.member.color.value else BLU)
         if not cats:
-            e.description = "Nessuna categoria di ruoli configurata dallo staff."
+            e.description = _T("prof.nessuna_categoria_ruoli_configurata_dallo")
             e.set_footer(text="Kitsune • Profilo")
             return e
         cat = cats.get(self.cat_id, {})
         modo = "scelta singola" if cat.get("single") else "scelta multipla"
-        e.description = ("Scegli la **categoria** dal menu, poi i tuoi ruoli.\n"
+        e.description = (_T("prof.scegli_categoria_dal_menu_poi") +
                          f"Categoria attuale: **{cat.get('name', '—')}** ({modo}).")
         roles = [r for r in (self.guild.get_role(rid) for rid in cat.get("roles", [])) if r]
         miei = [r.mention for r in roles if r in self.member.roles]
-        e.add_field(name="I tuoi ruoli qui",
+        e.add_field(name=_T("prof.tuoi_ruoli_qui"),
                     value=" ".join(miei) if miei else "*Nessuno*", inline=False)
         e.set_footer(text="Kitsune • Profilo")
         return e
@@ -576,7 +588,7 @@ class Profile(commands.Cog):
     async def profile(self, ctx: commands.Context, target: discord.Member = None):
         config = db.get_log_config(ctx.guild.id)
         if not logconfig.feature_enabled(config, "profile"):
-            await ctx.send("🚫 Il sistema profilo è disattivato su questo server.")
+            await ctx.send(_T("prof.sistema_profilo_disattivato_questo_server"))
             return
         member = target or ctx.author
         # Sul profilo di un altro mostro solo la Home (sola lettura)
