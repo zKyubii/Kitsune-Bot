@@ -1818,6 +1818,10 @@ class AutoReactView(BaseView):
 
 
 # ── COUNTING ──────────────────────────────────────────────────────────────────
+from cogs.counting import (milestones_of as counting_milestones,
+                           parse_milestones as counting_parse_milestones)
+
+
 def _counting_cfg(guild_id: int):
     config = db.get_log_config(guild_id)
     return config, config.setdefault("counting", {})
@@ -1866,6 +1870,37 @@ class CountingReactToggle(discord.ui.Button):
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
+class CountingMilestonesModal(discord.ui.Modal, title="Traguardi"):
+    def __init__(self, author_id, guild):
+        super().__init__()
+        self.author_id = author_id
+        self.guild = guild
+        cnt = db.get_log_config(guild.id).get("counting", {})
+        attuali = ", ".join(f"{n}: {e}" for n, e in counting_milestones(cnt).items())
+        self.box = discord.ui.TextInput(
+            label="Numero: emoji (separati da virgola)", required=False,
+            default=attuali, placeholder="100: 💯, 1000: 🔥",
+            max_length=200)
+        self.add_item(self.box)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        config, cnt = _counting_cfg(interaction.guild_id)
+        cnt["milestones"] = counting_parse_milestones(self.box.value)
+        db.save_log_config(interaction.guild_id, config)
+        v = CountingView(self.author_id, self.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class CountingMilestonesButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Traguardi", emoji="🏁",
+                         style=discord.ButtonStyle.secondary, row=3)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(
+            CountingMilestonesModal(self.view.author_id, self.view.guild))
+
+
 class CountingResetCountButton(discord.ui.Button):
     def __init__(self):
         super().__init__(label="Azzera conteggio", emoji="🔄",
@@ -1892,6 +1927,7 @@ class CountingView(BaseView):
         self.add_item(CountingResetToggle(cnt.get("reset_on_fail", True)))
         self.add_item(CountingReactToggle(cnt.get("react_ok", True)))
         self.add_item(CountingResetCountButton())
+        self.add_item(CountingMilestonesButton())
         self.add_item(BackButton("features"))
 
     def build_embed(self) -> discord.Embed:
@@ -1914,8 +1950,10 @@ class CountingView(BaseView):
         embed.add_field(name="🏆 Record", value=str(cnt.get("record", 0)), inline=True)
         embed.add_field(name="Se sbagliano", value=modo, inline=False)
         embed.add_field(name="Reazione ✅", value="attiva" if cnt.get("react_ok", True) else "spenta", inline=False)
+        ms = counting_milestones(cnt)
         embed.add_field(name="🏁 Traguardi",
-                        value="💯 a 100 · 🔥 a 1000", inline=False)
+                        value=" · ".join(f"{e} a {n}" for n, e in ms.items()) if ms else "nessuno",
+                        inline=False)
         embed.set_footer(text="Se qualcuno cancella il suo numero, il bot avvisa qual è il prossimo.")
         return embed
 
@@ -1940,9 +1978,11 @@ def _feature_view(key: str, author_id: int, guild: discord.Guild):
 
 class FeatureToggleButton(discord.ui.Button):
     def __init__(self, key: str, enabled: bool):
+        # Il pulsante mostra l'AZIONE, non lo stato (quello è già nell'embed):
+        # "Attiva" verde, "Disattiva" rosso.
         super().__init__(label="Disattiva" if enabled else "Attiva",
-                         emoji="🟢" if enabled else "🔴",
-                         style=discord.ButtonStyle.success if enabled else discord.ButtonStyle.danger, row=0)
+                         emoji="🔴" if enabled else "🟢",
+                         style=discord.ButtonStyle.danger if enabled else discord.ButtonStyle.success, row=0)
         self.key = key
 
     async def callback(self, interaction: discord.Interaction):

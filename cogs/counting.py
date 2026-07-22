@@ -12,13 +12,28 @@ import logconfig
 _NUM_RE = re.compile(r"^\d+$")
 
 
-def _milestone_emoji(numero: int):
-    """Emoji celebrativa per i due traguardi."""
-    if numero == 1000:
-        return "🔥"
-    if numero == 100:
-        return "💯"
-    return None
+# Traguardi di default: si personalizzano dalla dashboard, e svuotandoli si
+# disattivano del tutto.
+DEFAULT_MILESTONES = {"100": "💯", "1000": "🔥"}
+
+
+def milestones_of(cnt: dict) -> dict:
+    """{numero(str): emoji} — assente = default, vuoto = disattivati."""
+    return cnt.get("milestones", DEFAULT_MILESTONES)
+
+
+def _milestone_emoji(cnt: dict, numero: int):
+    return milestones_of(cnt).get(str(numero))
+
+
+def parse_milestones(testo: str) -> dict:
+    """Legge righe tipo '100: 💯, 1000: 🔥' (i separatori sono liberi)."""
+    out = {}
+    for pezzo in re.split(r"[,\n]+", testo or ""):
+        m = re.match(r"\s*(\d+)\s*[:=]?\s*(.+?)\s*$", pezzo)
+        if m:
+            out[m.group(1)] = m.group(2).strip()
+    return out
 
 
 class Counting(commands.Cog):
@@ -78,9 +93,9 @@ class Counting(commands.Cog):
             except discord.HTTPException:
                 pass
 
-        # I traguardi si festeggiano sempre, anche con la spunta disattivata:
-        # sono rari e sono il momento "premio".
-        traguardo = _milestone_emoji(numero)
+        # I traguardi si festeggiano anche con la spunta disattivata: sono rari
+        # ed è il momento "premio". Si configurano (o si spengono) da dashboard.
+        traguardo = _milestone_emoji(cnt, numero)
         if traguardo:
             try:
                 await message.add_reaction(traguardo)
@@ -145,7 +160,7 @@ class Counting(commands.Cog):
         autore = f"<@{uid}>" if uid else "Qualcuno"
         try:
             await canale.send(
-                f"⚠️ {autore} ha cancellato il suo numero: **{numero}**\n"
+                f"⚠️ {autore} ha cancellato il suo numero: ```{numero}```"
                 f"Il prossimo numero è **{numero + 1}**.",
                 allowed_mentions=discord.AllowedMentions.none(),
             )
