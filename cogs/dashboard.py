@@ -21,10 +21,10 @@ def build_main_embed(guild: discord.Guild, config: dict) -> discord.Embed:
     embed.add_field(
         name=_T("dash.sezioni_disponibili"),
         value=(
-            "📋 **Log** — canali ed eventi di log\n"
-            "🔧 **Funzioni** — attiva/disattiva le funzioni del bot\n"
-            "🛡️ **Moderazione** — regole automatiche dei warn\n"
-            "📊 **Livelli** — sistema XP, premi, classifica"
+            _T("dash2.log_canali_ed_eventi_log") +
+            _T("dash2.funzioni_attiva_disattiva_funzioni_bot") +
+            _T("dash2.moderazione_regole_automatiche_warn_n") +
+            _T("dash2.livelli_sistema_xp_premi_classifica")
         ),
         inline=False,
     )
@@ -238,7 +238,7 @@ class AddRuleButton(discord.ui.Button):
         v = self.view
         if v.pending_count is None or v.pending_action is None:
             await interaction.response.send_message(
-                "❌ Scegli prima il numero di warn e l'azione.", ephemeral=True)
+                _T("dash2.scegli_prima_numero_warn_l"), ephemeral=True)
             return
         config = db.get_log_config(interaction.guild_id)
         regole = [r for r in config.get("warn_actions", []) if r["count"] != v.pending_count]
@@ -389,11 +389,11 @@ class LogBlacklistView(BaseView):
         secret = bl.get("secret_channel")
         embed = discord.Embed(
             title=_T("dash.canali_blacklist_log"),
-            description=("I log dei canali selezionati **non** finiscono nei log normali.\n"
-                         "Se imposti un **canale segreto**, vengono rediretti lì; altrimenti vengono **ignorati**."),
+            description=(_T("dash2.log_canali_selezionati_non_finiscono") +
+                         _T("dash2.se_imposti_canale_segreto_vengono")),
             color=BLU,
         )
-        embed.add_field(name=_T("dash.canali_esclusi"), value=f"{len(chans)} canali" if chans else "*nessuno*", inline=False)
+        embed.add_field(name=_T("dash.canali_esclusi"), value=f"{len(chans)} canali" if chans else _T("dash2.nessuno"), inline=False)
         embed.add_field(name=_T("dash.canale_segreto"),
                         value=f"<#{secret}>" if secret else "Nessuno (i log vengono ignorati)", inline=False)
         return embed
@@ -417,7 +417,7 @@ class LogsMenuView(BaseView):
                 attivi = sum(1 for v in cat.get("events", {}).values() if v)
                 stato = f"<#{ch}> • {attivi}/{len(events)} eventi attivi"
             else:
-                stato = "❌ non configurato"
+                stato = _T("dash2.non_configurato")
             righe.append(f"**{label}** — {stato}")
         embed = discord.Embed(
             title=_T("dash.log"),
@@ -465,7 +465,7 @@ class QuoteSettingsView(BaseView):
 
     def build_embed(self) -> discord.Embed:
         config = db.get_log_config(self.guild.id)
-        attiva = "🟢 Attiva" if config.get("features", {}).get("quote", True) else "🔴 Disattivata"
+        attiva = _T("dash2.attiva") if config.get("features", {}).get("quote", True) else _T("dash2.disattivata")
         cid = config.get("quote_channel")
         dove = f"<#{cid}> (canale fisso)" if cid else "Nel canale dove viene usato il comando"
         embed = discord.Embed(
@@ -499,7 +499,7 @@ class WarnActionsView(BaseView):
             righe = [f"🔸 **{r['count']} warn** → {_desc_azione(r['action'], r['seconds'])}" for r in regole]
             testo = "\n".join(righe)
         else:
-            testo = "*Nessuna regola impostata.*"
+            testo = _T("dash2.nessuna_regola_impostata")
 
         embed = discord.Embed(
             title=_T("dash.regole_automatiche_warn"),
@@ -579,7 +579,7 @@ class SetupJailButton(discord.ui.Button):
 
         if role and channel:
             await interaction.response.send_message(
-                "✅ Il Jail è già configurato. Usa **Aggiorna canali** se hai aggiunto canali nuovi.",
+                _T("dash2.jail_gia_configurato_usa_aggiorna"),
                 ephemeral=True)
             return
 
@@ -587,20 +587,20 @@ class SetupJailButton(discord.ui.Button):
         try:
             if not role:
                 role = await guild.create_role(name=_T("dash.jailed"), colour=discord.Colour.dark_grey(),
-                                               reason="Setup Jail")
+                                               reason=_T("dash2.setup_jail"))
             if not channel:
                 overwrites = {
                     guild.default_role: discord.PermissionOverwrite(view_channel=False),
                     role: discord.PermissionOverwrite(view_channel=True, send_messages=True,
                                                       read_message_history=True),
                 }
-                channel = await guild.create_text_channel("jail", overwrites=overwrites, reason="Setup Jail")
+                channel = await guild.create_text_channel("jail", overwrites=overwrites, reason=_T("dash2.setup_jail"))
 
             for ch in guild.channels:
                 if ch.id == channel.id:
                     continue
                 try:
-                    await ch.set_permissions(role, view_channel=False, reason="Setup Jail")
+                    await ch.set_permissions(role, view_channel=False, reason=_T("dash2.setup_jail"))
                 except discord.HTTPException:
                     pass
 
@@ -628,7 +628,7 @@ class UpdateJailButton(discord.ui.Button):
         role = guild.get_role(jc.get("role")) if jc.get("role") else None
         if not role:
             await interaction.response.send_message(
-                "❌ Devi prima fare il **Setup** del Jail.", ephemeral=True)
+                _T("dash2.devi_prima_fare_setup_jail"), ephemeral=True)
             return
 
         await interaction.response.defer()
@@ -636,10 +636,10 @@ class UpdateJailButton(discord.ui.Button):
             if ch.id == jc.get("channel"):
                 continue
             try:
-                await ch.set_permissions(role, view_channel=False, reason="Jail: aggiornamento canali")
+                await ch.set_permissions(role, view_channel=False, reason=_T("dash2.jail_aggiornamento_canali"))
             except discord.HTTPException:
                 pass
-        await interaction.followup.send("🔄 Canali aggiornati: il ruolo Jailed è nascosto ovunque.", ephemeral=True)
+        await interaction.followup.send(_T("dash2.canali_aggiornati_ruolo_jailed_nascosto"), ephemeral=True)
 
 
 class JailLogSelect(discord.ui.ChannelSelect):
@@ -673,16 +673,16 @@ class JailView(BaseView):
         if role and channel:
             stato = f"✅ Configurato\n🎭 Ruolo: {role.mention}\n📁 Canale: {channel.mention}"
         else:
-            stato = "❌ Non configurato — premi **Setup** per crearlo."
-        log_txt = log.mention if log else "❌ non impostato"
+            stato = _T("dash2.non_configurato_premi_setup_crearlo")
+        log_txt = log.mention if log else _T("dash2.non_impostato")
 
         embed = discord.Embed(
             title=_T("dash.jail2"),
             description=(
-                "Sistema di isolamento: chi è in jail vede **solo** il canale jail.\n\n"
-                "• **Setup** — crea il ruolo *Jailed* e il canale *jail*, e nasconde tutti i canali\n"
-                "• **Aggiorna canali** — ri-applica le permissioni (i canali nuovi sono comunque automatici)\n\n"
-                "Comandi: `/jail`, `/unjail`, `/jailed`"
+                _T("dash2.sistema_isolamento_chi_jail_vede") +
+                _T("dash2.setup_crea_ruolo_jailed_canale") +
+                _T("dash2.aggiorna_canali_ri_applica_permissioni") +
+                _T("dash2.comandi_jail_unjail_jailed")
             ),
             color=BLU,
         )
@@ -698,7 +698,7 @@ class DMLockView(BaseView):
         self.add_item(BackButton("mod"))
 
     def build_embed(self) -> discord.Embed:
-        stato = "🟢 In pausa" if self.guild.dms_paused() else "🔴 Attivi"
+        stato = "🟢 In pausa" if self.guild.dms_paused() else _T("dash2.attivi")
         embed = discord.Embed(
             title=_T("dash.dm_lock2"),
             description=_T("dash.mette_pausa_dm_tra"),
@@ -714,7 +714,7 @@ class JoinLockView(BaseView):
         self.add_item(BackButton("mod"))
 
     def build_embed(self) -> discord.Embed:
-        stato = "🟢 In pausa" if self.guild.invites_paused() else "🔴 Attivi"
+        stato = "🟢 In pausa" if self.guild.invites_paused() else _T("dash2.attivi")
         embed = discord.Embed(
             title=_T("dash.join_lock2"),
             description=_T("dash.mette_pausa_inviti_nessuno"),
@@ -755,9 +755,9 @@ class ModerationView(BaseView):
 
     def build_embed(self) -> discord.Embed:
         config = db.get_log_config(self.guild.id)
-        antispam = "🟢 Attivo" if config.get("antispam", {}).get("enabled") else "🔴 Disattivo"
-        dm = "🟢 In pausa" if self.guild.dms_paused() else "🔴 Attivi"
-        join = "🟢 In pausa" if self.guild.invites_paused() else "🔴 Attivi"
+        antispam = _T("dash2.attivo") if config.get("antispam", {}).get("enabled") else _T("dash2.disattivo")
+        dm = "🟢 In pausa" if self.guild.dms_paused() else _T("dash2.attivi")
+        join = "🟢 In pausa" if self.guild.invites_paused() else _T("dash2.attivi")
         n_regole = len(config.get("warn_actions", []))
 
         embed = discord.Embed(
@@ -766,9 +766,9 @@ class ModerationView(BaseView):
             color=BLU,
         )
         embed.add_field(name=_T("dash.stato_rapido"), value=(
-            f"🚨 Antispam: {antispam}\n"
-            f"🔒 DM Lock: {dm}\n"
-            f"🚪 Join Lock: {join}\n"
+            f"🚨 Antispam: {antispam}\n" +
+            f"🔒 DM Lock: {dm}\n" +
+            f"🚪 Join Lock: {join}\n" +
             f"⚠️ Regole Warn: {n_regole} attive"
         ), inline=False)
         return embed
@@ -852,19 +852,19 @@ class AntispamView(BaseView):
     def build_embed(self) -> discord.Embed:
         asc = db.get_log_config(self.guild.id).get("antispam", {})
         wl = asc.get("whitelist", {})
-        log = f"<#{asc['log_channel']}>" if asc.get("log_channel") else "❌ non impostato"
+        log = f"<#{asc['log_channel']}>" if asc.get("log_channel") else _T("dash2.non_impostato")
         embed = discord.Embed(
             title=_T("dash.antispam3"),
             description=_T("dash.protezione_automatica_contro_spam"),
             color=BLU,
         )
-        embed.add_field(name=_T("dash.stato"), value=_T("dash.attivo") if asc.get("enabled") else "🔴 Disattivo", inline=True)
-        embed.add_field(name=_T("dash.anti_scam"), value=_T("dash.attivo") if asc.get("antiscam") else "🔴 Disattivo", inline=True)
+        embed.add_field(name=_T("dash.stato"), value=_T("dash.attivo") if asc.get("enabled") else _T("dash2.disattivo"), inline=True)
+        embed.add_field(name=_T("dash.anti_scam"), value=_T("dash.attivo") if asc.get("antiscam") else _T("dash2.disattivo"), inline=True)
         embed.add_field(name=_T("dash.canale_log"), value=log, inline=False)
         embed.add_field(
             name=_T("dash.whitelist2"),
-            value=(f"{len(wl.get('channels', []))} canali, "
-                   f"{len(wl.get('roles', []))} ruoli, "
+            value=(f"{len(wl.get('channels', []))} canali, " +
+                   f"{len(wl.get('roles', []))} ruoli, " +
                    f"{len(wl.get('users', []))} utenti"),
             inline=False,
         )
@@ -1031,7 +1031,7 @@ class SpamCategoryConfigView(BaseView):
         c = categoria_cfg(config, self.category)
         sanz = t(config, SANCTIONS.get(c["sanction"], c["sanction"]))
         embed = discord.Embed(title="⚙️ " + t(config, SPAM_CATEGORIES[self.category]), color=BLU)
-        embed.add_field(name=_T("dash.stato"), value=_T("dash.attiva") if c["enabled"] else "🔴 Disattiva", inline=True)
+        embed.add_field(name=_T("dash.stato"), value=_T("dash.attiva") if c["enabled"] else _T("dash2.disattiva"), inline=True)
         embed.add_field(name=_T("dash.sanzione"), value=sanz, inline=True)
         if c["sanction"] == "timeout":
             embed.add_field(name=_T("dash.durata"), value=f"{c.get('seconds', 600) // 60} min", inline=True)
@@ -1077,7 +1077,7 @@ class ConfessionSettingsView(BaseView):
 
     def build_embed(self) -> discord.Embed:
         cfg = db.get_config(self.guild.id)
-        attiva = "🟢 Attiva" if db.get_log_config(self.guild.id).get("features", {}).get("confession", True) else "🔴 Disattivata"
+        attiva = _T("dash2.attiva") if db.get_log_config(self.guild.id).get("features", {}).get("confession", True) else _T("dash2.disattivata")
         ch = self.guild.get_channel(cfg["confession_channel"]) if cfg and cfg["confession_channel"] else None
         log = self.guild.get_channel(cfg["log_channel"]) if cfg and cfg["log_channel"] else None
         embed = discord.Embed(
@@ -1086,8 +1086,8 @@ class ConfessionSettingsView(BaseView):
             color=BLU,
         )
         embed.add_field(name=_T("dash.stato"), value=attiva, inline=False)
-        embed.add_field(name=_T("dash.canale_confessioni"), value=ch.mention if ch else "❌ non impostato", inline=False)
-        embed.add_field(name=_T("dash.log_staff"), value=log.mention if log else "❌ non impostato (opzionale)", inline=False)
+        embed.add_field(name=_T("dash.canale_confessioni"), value=ch.mention if ch else _T("dash2.non_impostato"), inline=False)
+        embed.add_field(name=_T("dash.log_staff"), value=log.mention if log else _T("dash2.non_impostato_opzionale"), inline=False)
         return embed
 
 
@@ -1122,15 +1122,15 @@ class AutoroleView(BaseView):
             description=_T("dash.ruoli_assegnati_automaticamente_chi"),
             color=BLU,
         )
-        embed.add_field(name=_T("dash.ruoli_attivi"), value=" ".join(ruoli) if ruoli else "*nessuno*", inline=False)
+        embed.add_field(name=_T("dash.ruoli_attivi"), value=" ".join(ruoli) if ruoli else _T("dash2.nessuno"), inline=False)
         return embed
 
 
 # ── PERMESSI MOD (per categoria: lock / jail / warn) ──────────────────────────
 MOD_PERM_CATS = {
-    "lock": ("🔒 Lock canali", "lock / unlock"),
-    "jail": ("⛓️ Jail", "jail / unjail / jailed"),
-    "warn": ("⚠️ Warn", "warn / warnings / delwarn / clearwarns"),
+    "lock": (_T("dash2.lock_canali"), "lock / unlock"),
+    "jail": (_T("dash2.jail"), _T("dash2.jail_unjail_jailed")),
+    "warn": (_T("dash2.warn"), _T("dash2.warn_warnings_delwarn_clearwarns")),
 }
 
 
@@ -1162,9 +1162,9 @@ class PermissionsView(BaseView):
         embed = discord.Embed(
             title=_T("dash.permessi_comandi_moderazione"),
             description=(
-                "Tra chi **vede** i comandi (ha *Moderare membri*), scegli **quali ruoli** "
-                "possono davvero usarli, per categoria.\n"
-                "Gli **Amministratori** possono sempre. Se una categoria è vuota, "
+                _T("dash2.tra_chi_vede_comandi_ha") +
+                _T("dash2.possono_davvero_usarli_categoria_n") +
+                _T("dash2.amministratori_possono_sempre_se_categoria") +
                 "vale il permesso nativo (chiunque lo veda può usarlo)."
             ),
             color=BLU,
@@ -1266,7 +1266,7 @@ class PartnershipSettingsView(BaseView):
         config = db.get_log_config(self.guild.id)
         p = config.get("partnership", {})
         feats = config.get("features", {})
-        attiva = "🟢 Attiva" if feats.get("partnership", True) else "🔴 Disattivata"
+        attiva = _T("dash2.attiva") if feats.get("partnership", True) else _T("dash2.disattivata")
         ch = self.guild.get_channel(p.get("channel")) if p.get("channel") else None
         roles = [self.guild.get_role(r) for r in p.get("roles", [])]
         roles = [r.mention for r in roles if r]
@@ -1281,16 +1281,16 @@ class PartnershipSettingsView(BaseView):
 
         embed = discord.Embed(
             title=_T("dash.partnership"),
-            description=("Sistema di partnership: chi è autorizzato usa `/partnership` per "
-                         "pubblicare una partner nel canale dedicato.\n"
-                         "Imposta il canale, i ruoli abilitati e i ping in base ai membri."),
+            description=(_T("dash2.sistema_partnership_chi_autorizzato_usa") +
+                         _T("dash2.pubblicare_partner_nel_canale_dedicato") +
+                         _T("dash2.imposta_canale_ruoli_abilitati_ping")),
             color=BLU,
         )
         embed.add_field(name=_T("dash.stato"), value=attiva, inline=False)
-        embed.add_field(name=_T("dash.canale_partner"), value=ch.mention if ch else "❌ non impostato", inline=False)
+        embed.add_field(name=_T("dash.canale_partner"), value=ch.mention if ch else _T("dash2.non_impostato"), inline=False)
         embed.add_field(name=_T("dash.ruoli_autorizzati"),
                         value=" ".join(roles) if roles else "*nessuno (solo admin)*", inline=False)
-        embed.add_field(name=_T("dash.ping"), value="\n".join(ping_lines) if ping_lines else "*nessuno*", inline=False)
+        embed.add_field(name=_T("dash.ping"), value="\n".join(ping_lines) if ping_lines else _T("dash2.nessuno"), inline=False)
         return embed
 
 
@@ -1444,18 +1444,18 @@ class AutoMsgView(BaseView):
         config = db.get_log_config(self.guild.id)
         feats = config.get("features", {})
         am = config.get("automsg", {})
-        attiva = "🟢 Attiva" if feats.get("automsg", True) else "🔴 Disattivata"
+        attiva = _T("dash2.attiva") if feats.get("automsg", True) else _T("dash2.disattivata")
         ch = self.guild.get_channel(am.get("channel")) if am.get("channel") else None
         righe = [f"• **{m.get('title')}** — {m.get('time')}" for m in am.get("messages", [])]
         embed = discord.Embed(
             title=_T("dash.auto_message2"),
-            description=("Messaggi automatici inviati a un orario fisso (**ora italiana**).\n"
-                         "Aggiungine quanti vuoi: ognuno ha **titolo**, **orario** e **testo**."),
+            description=(_T("dash2.messaggi_automatici_inviati_orario_fisso") +
+                         _T("dash2.aggiungine_quanti_vuoi_ognuno_ha")),
             color=BLU,
         )
         embed.add_field(name=_T("dash.stato"), value=attiva, inline=False)
-        embed.add_field(name=_T("dash.canale3"), value=ch.mention if ch else "❌ non impostato", inline=False)
-        embed.add_field(name=_T("dash.messaggi"), value="\n".join(righe)[:1000] if righe else "*nessuno*", inline=False)
+        embed.add_field(name=_T("dash.canale3"), value=ch.mention if ch else _T("dash2.non_impostato"), inline=False)
+        embed.add_field(name=_T("dash.messaggi"), value="\n".join(righe)[:1000] if righe else _T("dash2.nessuno"), inline=False)
         embed.add_field(name=_T("dash.variabili"), value="`{server}` · `{membercount}`", inline=False)
         return embed
 
@@ -1522,7 +1522,7 @@ class AutoReactWordModal(discord.ui.Modal, title=_T("dash.reaction_parola")):
 
     async def on_submit(self, interaction: discord.Interaction):
         if not self.parola.value.strip():
-            return await interaction.response.send_message("❌ Scrivi una parola.", ephemeral=True)
+            return await interaction.response.send_message(_T("dash2.scrivi_parola"), ephemeral=True)
         config = db.get_log_config(interaction.guild_id)
         rules = config.setdefault("autoreact", {}).setdefault("rules", [])
         rid = _autoreact_new_id(rules)
@@ -1614,7 +1614,7 @@ class AutoReactManageSelect(discord.ui.Select):
                 lab = f"'{r.get('trigger')}' ({modo}) → {emo}"
             options.append(discord.SelectOption(label=lab[:100], value=str(r.get("id"))))
         ph = (f"✏️ Modifica una reaction — pag {page + 1}/{tot}"
-              if tot > 1 else "✏️ Modifica una reaction...")
+              if tot > 1 else _T("dash2.modifica_reaction"))
         super().__init__(placeholder=ph, options=options or [discord.SelectOption(label="—")], row=2)
 
     async def callback(self, interaction: discord.Interaction):
@@ -1649,7 +1649,7 @@ class ServerEmojiSelect(discord.ui.Select):
                    for e in chunk]
         tot = max(1, (len(emojis) + 24) // 25)
         ph = (f"😀 Emoji dal server (max 5) — pag {page + 1}/{tot}"
-              if tot > 1 else "😀 Scegli emoji dal server (max 5)...")
+              if tot > 1 else _T("dash2.scegli_emoji_dal_server_max"))
         super().__init__(placeholder=ph, min_values=0, max_values=min(5, len(options)) or 1,
                          options=options or [discord.SelectOption(label="—")], row=0)
 
@@ -1743,9 +1743,9 @@ class RuleModeButton(discord.ui.Button):
     def __init__(self, rule):
         is_exact = rule.get("mode") == "exact"
         if rule.get("type") == "mention":
-            stato = "solo il tag" if is_exact else "ovunque"
+            stato = _T("dash2.solo_tag") if is_exact else "ovunque"
         else:
-            stato = "solo la parola" if is_exact else "ovunque"
+            stato = _T("dash2.solo_parola") if is_exact else "ovunque"
         super().__init__(label=f"🔁 Modalità: {stato}", style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
@@ -1792,11 +1792,11 @@ class RuleEditView(BaseView):
 
     def build_embed(self) -> discord.Embed:
         r = _autoreact_get(db.get_log_config(self.guild.id), self.rule_id) or {}
-        emo = " ".join(r.get("emojis", [])) or "*nessuna — scegline dal menu!*"
+        emo = " ".join(r.get("emojis", [])) or _T("dash2.nessuna_scegline_dal_menu")
         if r.get("type") == "mention":
             quando = f"quando viene pingato <@{r.get('trigger')}>"
         else:
-            modo = "solo la parola esatta" if r.get("mode") == "exact" else "se la parola è contenuta"
+            modo = _T("dash2.solo_parola_esatta") if r.get("mode") == "exact" else _T("dash2.se_parola_contenuta")
             quando = f"parola `{r.get('trigger')}` ({modo})"
         embed = discord.Embed(title=_T("dash.modifica_reaction"), color=BLU,
                               description=f"**Quando:** {quando}\n**Emoji:** {emo}")
@@ -1828,26 +1828,26 @@ class AutoReactView(BaseView):
         config = db.get_log_config(self.guild.id)
         feats = config.get("features", {})
         ar = config.get("autoreact", {})
-        attiva = "🟢 Attiva" if feats.get("autoreact", True) else "🔴 Disattivata"
+        attiva = _T("dash2.attiva") if feats.get("autoreact", True) else _T("dash2.disattivata")
         righe = []
         for r in ar.get("rules", []):
             emo = " ".join(r.get("emojis", [])) or "*no emoji*"
             if r.get("type") == "mention":
                 righe.append(f"• <@{r['trigger']}> → {emo}")
             else:
-                modo = "solo la parola" if r.get("mode") == "exact" else "se contenuta"
+                modo = _T("dash2.solo_parola") if r.get("mode") == "exact" else "se contenuta"
                 righe.append(f"• `{r.get('trigger')}` ({modo}) → {emo}")
         embed = discord.Embed(
             title=_T("dash.reaction_automatiche"),
-            description=("Il bot reagisce quando un messaggio contiene una **parola** "
-                         "(esatta o contenuta) o quando un **utente** viene pingato. Max 5 emoji a regola.\n"
-                         "Seleziona una regola dal menu per **modificarla** (emoji, parola, eliminarla)."),
+            description=(_T("dash2.bot_reagisce_quando_messaggio_contiene") +
+                         _T("dash2.esatta_o_contenuta_o_quando") +
+                         _T("dash2.seleziona_regola_dal_menu_modificarla")),
             color=BLU,
         )
         embed.add_field(name=_T("dash.stato"), value=attiva, inline=False)
-        embed.add_field(name=_T("dash.regole"), value="\n".join(righe)[:1000] if righe else "*nessuna*", inline=False)
+        embed.add_field(name=_T("dash.regole"), value="\n".join(righe)[:1000] if righe else _T("dash2.nessuna"), inline=False)
         bl = ar.get("blacklist_channels", [])
-        embed.add_field(name=_T("dash.canali_esclusi2"), value=f"{len(bl)} canali" if bl else "*nessuno*", inline=False)
+        embed.add_field(name=_T("dash.canali_esclusi2"), value=f"{len(bl)} canali" if bl else _T("dash2.nessuno"), inline=False)
         return embed
 
 
@@ -2087,11 +2087,11 @@ def _profile_cfg(guild_id: int):
 class ProfileSectionSelect(discord.ui.Select):
     def __init__(self):
         opts = [
-            ("🎭 Categorie ruoli", "rolecats", "Categorie di self-role per il +profile"),
-            ("🛡️ Bypass privacy", "bypass", "Ruoli che vedono avatar/banner/quote di tutti"),
-            ("🔊 Vocali private", "voices", "Collega un canale vocale a un utente"),
-            ("⭐ Custom reactions", "react", "Ruoli abilitati e numero max di emoji"),
-            ("🏅 Ruolo primario", "primary", "Ruolo speciale mostrato nel profilo"),
+            (_T("dash2.categorie_ruoli"), "rolecats", _T("dash2.categorie_self_role_profile")),
+            ("🛡️ Bypass privacy", "bypass", _T("dash2.ruoli_vedono_avatar_banner_quote")),
+            ("🔊 Vocali private", "voices", _T("dash2.collega_canale_vocale_utente")),
+            ("⭐ Custom reactions", "react", _T("dash2.ruoli_abilitati_numero_max_emoji")),
+            (_T("dash2.ruolo_primario"), "primary", _T("dash2.ruolo_speciale_mostrato_nel_profilo")),
         ]
         super().__init__(placeholder=_T("dash.apri_sotto_sezione"), row=1,
                          options=[discord.SelectOption(label=l, value=v, description=d) for l, v, d in opts])
@@ -2113,7 +2113,7 @@ class ProfileDashView(BaseView):
 
     def build_embed(self) -> discord.Embed:
         config, prof = _profile_cfg(self.guild.id)
-        attiva = "🟢 Attiva" if config.get("features", {}).get("profile", True) else "🔴 Disattivata"
+        attiva = _T("dash2.attiva") if config.get("features", {}).get("profile", True) else _T("dash2.disattivata")
         bypass = prof.get("privacy_bypass_roles", [])
         voices = prof.get("private_voices", {})
         allowed = prof.get("custom_react", {}).get("allowed_roles", [])
@@ -2192,7 +2192,7 @@ class PrivateVoiceLinkButton(discord.ui.Button):
         v = self.view
         if not v.pending_channel or not v.pending_user:
             await interaction.response.send_message(
-                "❌ Scegli prima un canale e un utente.", ephemeral=True)
+                _T("dash2.scegli_prima_canale_utente"), ephemeral=True)
             return
         config, prof = _profile_cfg(interaction.guild_id)
         voices = prof.setdefault("private_voices", {})
@@ -2248,7 +2248,7 @@ class PrivateVoiceView(BaseView):
                 righe.append(f"{nome} → <@{uid}>")
             testo = "\n".join(righe)
         else:
-            testo = "*Nessuna vocale assegnata.*"
+            testo = _T("dash2.nessuna_vocale_assegnata")
         embed = discord.Embed(
             title=_T("dash.vocali_private"),
             description=_T("dash.crea_tu_canale_poi"),
@@ -2361,7 +2361,7 @@ class PrimaryRoleAssignButton(discord.ui.Button):
         v = self.view
         if not v.pending_user or not v.pending_role:
             await interaction.response.send_message(
-                "❌ Scegli prima un utente e un ruolo.", ephemeral=True)
+                _T("dash2.scegli_prima_utente_ruolo"), ephemeral=True)
             return
         config, prof = _profile_cfg(interaction.guild_id)
         prof.setdefault("primary_roles", {})[str(v.pending_user)] = v.pending_role
@@ -2403,7 +2403,7 @@ class PrimaryRoleView(BaseView):
         if primary:
             testo = "\n".join(f"<@{uid}> → <@&{rid}>" for uid, rid in primary.items())
         else:
-            testo = "*Nessuna assegnazione.*"
+            testo = _T("dash2.nessuna_assegnazione")
         embed = discord.Embed(
             title=_T("dash.ruolo_primario"),
             description=_T("dash.ruolo_speciale_mostrato_cima"),
@@ -2497,13 +2497,13 @@ class RoleCategoriesView(BaseView):
     def build_embed(self) -> discord.Embed:
         cats = db.get_log_config(self.guild.id).get("profile", {}).get("role_categories", {})
         if cats:
-            righe = [f"{c.get('emoji', '')} **{c.get('name', '—')}** — "
-                     f"{len(c.get('roles', []))} ruoli "
+            righe = [f"{c.get('emoji', '')} **{c.get('name', '—')}** — " +
+                     f"{len(c.get('roles', []))} ruoli " +
                      f"({'singola' if c.get('single') else 'multipla'})"
                      for c in cats.values()]
             testo = "\n".join(righe)
         else:
-            testo = "*Nessuna categoria. Creane una con ➕.*"
+            testo = _T("dash2.nessuna_categoria_creane")
         embed = discord.Embed(
             title=_T("dash.categorie_ruoli"),
             description=_T("dash.categorie_self_role_utenti"),
@@ -2593,7 +2593,7 @@ class RoleCategoryEditView(BaseView):
         )
         embed.add_field(name=_T("dash.tipo"),
                         value=_T("dash.scelta_singola_solo_ruolo") if cat.get("single")
-                        else "Scelta multipla (più ruoli)", inline=False)
+                        else _T("dash2.scelta_multipla_piu_ruoli"), inline=False)
         embed.add_field(name=_T("dash.ruoli"), value=testo, inline=False)
         return embed
 
@@ -2659,11 +2659,11 @@ class XpCooldownButton(discord.ui.Button):
 class LevelSectionSelect(discord.ui.Select):
     def __init__(self):
         opts = [
-            ("📈 Curva XP", "curva", "Base, incremento e override per livello"),
-            ("🎉 Level-up", "levelup", "Canale e messaggio di salita di livello"),
-            ("🏅 Ruoli premio", "rewards", "Assegna ruoli a certi livelli"),
-            ("✨ Multiplier", "multiplier", "Ruoli che danno XP extra"),
-            ("🚫 Blacklist", "blacklist", "Ruoli/utenti esclusi dagli XP"),
+            ("📈 Curva XP", "curva", _T("dash2.base_incremento_override_livello")),
+            ("🎉 Level-up", "levelup", _T("dash2.canale_messaggio_salita_livello")),
+            (_T("dash2.ruoli_premio"), "rewards", _T("dash2.assegna_ruoli_certi_livelli")),
+            ("✨ Multiplier", "multiplier", _T("dash2.ruoli_danno_xp_extra")),
+            ("🚫 Blacklist", "blacklist", _T("dash2.ruoli_utenti_esclusi_dagli_xp")),
         ]
         super().__init__(placeholder=_T("dash.apri_sotto_sezione"), row=0,
                          options=[discord.SelectOption(label=l, value=v, description=d) for l, v, d in opts])
@@ -2693,10 +2693,10 @@ class LevelsView(BaseView):
         sn = lambda b: "🟢" if b else "🔴"
         embed = discord.Embed(
             title=_T("dash.livelli"),
-            description=("Sistema di XP e livelli. Usa il menu in alto per le sotto-sezioni,\n"
-                         "i pulsanti per attivare/disattivare e impostare XP/cooldown.\n"
-                         "**Coleave**: azzera gli XP quando un utente esce dal server.\n"
-                         "**Reward replace** 🟢 = sostituisce i ruoli premio · 🔴 = li accumula."),
+            description=(_T("dash2.sistema_xp_livelli_usa_menu") +
+                         _T("dash2.pulsanti_attivare_disattivare_impostare_xp") +
+                         _T("dash2.coleave_azzera_xp_quando_utente") +
+                         _T("dash2.reward_replace_sostituisce_ruoli_premio")),
             color=BLU,
         )
         embed.add_field(name=_T("dash.stato"),
@@ -2818,7 +2818,7 @@ class LevelCurveView(BaseView):
         curve = ls.cfg(db.get_log_config(self.guild.id)).get("curve", {})
         items = sorted(curve.items(), key=lambda x: int(x[0]))
         if not items:
-            testo = "*Nessun livello impostato (default: 100 XP a livello).*"
+            testo = _T("dash2.nessun_livello_impostato_default_100")
         elif len(items) <= 12:
             testo = "\n".join(f"**Lv {lvl}** → `{xp}` XP per salire" for lvl, xp in items)
         else:
@@ -2826,9 +2826,9 @@ class LevelCurveView(BaseView):
             testo = f"{head}\n… e altri **{len(items) - 8}** livelli impostati"
         embed = discord.Embed(
             title=_T("dash.curva_xp_manuale"),
-            description=("Imposti tu, livello per livello, quanti XP servono per salire al successivo.\n"
-                         "**Import in blocco**: incolli tutti i valori in un colpo (dal livello 0).\n"
-                         "I livelli senza valore usano quello del livello impostato più vicino sotto."),
+            description=(_T("dash2.imposti_tu_livello_livello_quanti") +
+                         _T("dash2.import_blocco_incolli_tutti_valori") +
+                         _T("dash2.livelli_senza_valore_usano_quello")),
             color=BLU,
         )
         embed.add_field(name=f"Livelli impostati ({len(items)})", value=testo, inline=False)
@@ -2910,10 +2910,10 @@ class LevelUpView(BaseView):
     def build_embed(self) -> discord.Embed:
         c = ls.cfg(db.get_log_config(self.guild.id))
         ch = self.guild.get_channel(c["levelup_channel"]) if c["levelup_channel"] else None
-        dove = ch.mention if ch else "Nel canale dove l'utente ha scritto"
+        dove = ch.mention if ch else _T("dash2.nel_canale_dove_l_utente")
         embed = discord.Embed(
             title=_T("dash.embed_level_up2"),
-            description=("Embed inviato quando un utente sale di livello (mostra l'avatar dell'utente).\n"
+            description=(_T("dash2.embed_inviato_quando_utente_sale") +
                          "**Variabili:** `{user}` `{user_name}` `{level}` `{server}`"),
             color=BLU,
         )
@@ -2989,12 +2989,12 @@ class LevelRewardsView(BaseView):
                 righe.append(f"**Lv {lvl}** → <@&{rid}>")
             testo = "\n".join(righe)
         else:
-            testo = "*nessun premio impostato*"
+            testo = _T("dash2.nessun_premio_impostato")
         embed = discord.Embed(
             title=_T("dash.ruoli_premio"),
-            description=("Assegna un ruolo al raggiungimento di un livello.\n"
-                         f"**Reward replace:** {'🟢 sostituisce' if c['reward_replace'] else '🔴 accumula'} "
-                         "(modificabile dalla pagina Livelli)."),
+            description=(_T("dash2.assegna_ruolo_al_raggiungimento_livello") +
+                         f"**Reward replace:** {'🟢 sostituisce' if c['reward_replace'] else '🔴 accumula'} " +
+                         _T("dash2.modificabile_dalla_pagina_livelli")),
             color=BLU,
         )
         embed.add_field(name=_T("dash.premi"), value=testo, inline=False)
@@ -3066,7 +3066,7 @@ class LevelMultiplierView(BaseView):
         if mult:
             testo = "\n".join(f"<@&{rid}> → **×{val}**" for rid, val in mult.items())
         else:
-            testo = "*nessun multiplier*"
+            testo = _T("dash2.nessun_multiplier")
         embed = discord.Embed(
             title=_T("dash.multiplier"),
             description=_T("dash.ruoli_danno_xp_extra"),
@@ -3132,19 +3132,19 @@ class LevelBlacklistView(BaseView):
         c = ls.cfg(db.get_log_config(self.guild.id))
         embed = discord.Embed(
             title=_T("dash.blacklist_xp"),
-            description=("Ruoli, utenti e canali che **non** danno XP.\n"
-                         "Seleziona quelli desiderati nei menu (la selezione sostituisce la lista).\n"
-                         "Per i canali puoi scegliere anche una **categoria** intera."),
+            description=(_T("dash2.ruoli_utenti_canali_non_danno") +
+                         "Seleziona quelli desiderati nei menu (la selezione sostituisce la lista).\n" +
+                         _T("dash2.canali_puoi_scegliere_anche_categoria")),
             color=BLU,
         )
         embed.add_field(name=_T("dash.ruoli_esclusi"),
-                        value=f"{len(c.get('blacklist_roles', []))} ruoli" if c.get("blacklist_roles") else "*nessuno*",
+                        value=f"{len(c.get('blacklist_roles', []))} ruoli" if c.get("blacklist_roles") else _T("dash2.nessuno"),
                         inline=True)
         embed.add_field(name=_T("dash.utenti_esclusi"),
-                        value=f"{len(c.get('blacklist_users', []))} utenti" if c.get("blacklist_users") else "*nessuno*",
+                        value=f"{len(c.get('blacklist_users', []))} utenti" if c.get("blacklist_users") else _T("dash2.nessuno"),
                         inline=True)
         embed.add_field(name=_T("dash.canali_esclusi"),
-                        value=f"{len(c.get('blacklist_channels', []))} canali" if c.get("blacklist_channels") else "*nessuno*",
+                        value=f"{len(c.get('blacklist_channels', []))} canali" if c.get("blacklist_channels") else _T("dash2.nessuno"),
                         inline=True)
         return embed
 
