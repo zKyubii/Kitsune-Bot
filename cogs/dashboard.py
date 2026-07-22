@@ -3154,7 +3154,7 @@ class Dashboard(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="dashboard", description=_T("dash.apri_pannello_configurazione_server"))
+    @app_commands.command(name="dashboard", description="Open the server configuration panel")
     @app_commands.default_permissions(administrator=True)
     @app_commands.checks.has_permissions(administrator=True)
     async def dashboard(self, interaction: discord.Interaction):

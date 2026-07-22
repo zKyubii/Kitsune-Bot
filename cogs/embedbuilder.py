@@ -927,11 +927,11 @@ class EmbedBuilder(commands.Cog):
 
     gruppo = app_commands.Group(
         name="embed",
-        description=_T("eb.create_and_manage_custom_embeds"),
+        description="Create and manage custom embeds",
         default_permissions=discord.Permissions(manage_guild=True),
     )
 
-    @gruppo.command(name="create", description=_T("eb.create_new_embed_and_open"))
+    @gruppo.command(name="create", description="Create a new embed and open it in the editor")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def create(self, interaction: discord.Interaction, nome: str):
         if db.get_embed(interaction.guild_id, nome) is not None:
