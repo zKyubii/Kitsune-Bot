@@ -1817,7 +1817,112 @@ class AutoReactView(BaseView):
         return embed
 
 
+# ── COUNTING ──────────────────────────────────────────────────────────────────
+def _counting_cfg(guild_id: int):
+    config = db.get_log_config(guild_id)
+    return config, config.setdefault("counting", {})
+
+
+class CountingChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self, current):
+        super().__init__(placeholder="🔢 Canale del counting...",
+                         channel_types=[discord.ChannelType.text],
+                         min_values=0, max_values=1, row=1,
+                         default_values=_dv([current] if current else [],
+                                            discord.SelectDefaultValueType.channel))
+
+    async def callback(self, interaction: discord.Interaction):
+        config, cnt = _counting_cfg(interaction.guild_id)
+        cnt["channel"] = self.values[0].id if self.values else None
+        db.save_log_config(interaction.guild_id, config)
+        v = CountingView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class CountingResetToggle(discord.ui.Button):
+    def __init__(self, attivo):
+        super().__init__(label="Se sbagliano: riparte da 1" if attivo else "Se sbagliano: cancella e basta",
+                         emoji="🔁" if attivo else "🗑️",
+                         style=discord.ButtonStyle.secondary, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        config, cnt = _counting_cfg(interaction.guild_id)
+        cnt["reset_on_fail"] = not cnt.get("reset_on_fail", True)
+        db.save_log_config(interaction.guild_id, config)
+        v = CountingView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class CountingReactToggle(discord.ui.Button):
+    def __init__(self, attivo):
+        super().__init__(label="Reazione ✅ attiva" if attivo else "Reazione ✅ spenta",
+                         style=discord.ButtonStyle.secondary, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        config, cnt = _counting_cfg(interaction.guild_id)
+        cnt["react_ok"] = not cnt.get("react_ok", True)
+        db.save_log_config(interaction.guild_id, config)
+        v = CountingView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class CountingResetCountButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Azzera conteggio", emoji="🔄",
+                         style=discord.ButtonStyle.danger, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        config, cnt = _counting_cfg(interaction.guild_id)
+        cnt["current"] = 0
+        cnt["last_user"] = None
+        cnt["last_message_id"] = None
+        db.save_log_config(interaction.guild_id, config)
+        v = CountingView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class CountingView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        config = db.get_log_config(guild.id)
+        feats = config.get("features", {})
+        cnt = config.get("counting", {})
+        self.add_item(FeatureToggleButton("counting", feats.get("counting", True)))
+        self.add_item(CountingChannelSelect(cnt.get("channel")))
+        self.add_item(CountingResetToggle(cnt.get("reset_on_fail", True)))
+        self.add_item(CountingReactToggle(cnt.get("react_ok", True)))
+        self.add_item(CountingResetCountButton())
+        self.add_item(BackButton("features"))
+
+    def build_embed(self) -> discord.Embed:
+        config = db.get_log_config(self.guild.id)
+        cnt = config.get("counting", {})
+        attiva = "🟢 Attiva" if config.get("features", {}).get("counting", True) else "🔴 Disattivata"
+        ch = self.guild.get_channel(cnt.get("channel")) if cnt.get("channel") else None
+        modo = ("il conteggio riparte da 1" if cnt.get("reset_on_fail", True)
+                else "il messaggio sbagliato viene cancellato")
+        embed = discord.Embed(
+            title="🔢 Counting",
+            description="Si conta a turno nel canale scelto: **non si può contare due volte di fila**.\n"
+                        "I messaggi che non sono numeri vengono ignorati.",
+            color=BLU,
+        )
+        embed.add_field(name="Stato", value=attiva, inline=False)
+        embed.add_field(name="📢 Canale", value=ch.mention if ch else "❌ non impostato", inline=False)
+        embed.add_field(name="Numero attuale", value=f"**{cnt.get('current', 0)}** "
+                                                     f"(prossimo: {cnt.get('current', 0) + 1})", inline=True)
+        embed.add_field(name="🏆 Record", value=str(cnt.get("record", 0)), inline=True)
+        embed.add_field(name="Se sbagliano", value=modo, inline=False)
+        embed.add_field(name="Reazione ✅", value="attiva" if cnt.get("react_ok", True) else "spenta", inline=False)
+        embed.add_field(name="🏁 Traguardi",
+                        value="💯 a 100 · 🔥 a 1000", inline=False)
+        embed.set_footer(text="Se qualcuno cancella il suo numero, il bot avvisa qual è il prossimo.")
+        return embed
+
+
 def _feature_view(key: str, author_id: int, guild: discord.Guild):
+    if key == "counting":
+        return CountingView(author_id, guild)
     if key == "quote":
         return QuoteSettingsView(author_id, guild)
     if key == "confession":

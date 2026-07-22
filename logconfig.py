@@ -66,6 +66,7 @@ FEATURES = {
     "automsg": "📨 Auto Message",
     "autoreact": "⭐ Reaction automatiche",
     "profile": "👤 Profilo utente",
+    "counting": "🔢 Counting",
 }
 
 
