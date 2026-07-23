@@ -72,10 +72,16 @@ def poll_allowed(config: dict, member) -> bool:
     return any(r.id in consentiti for r in getattr(member, "roles", []))
 
 
-def build_poll_text(titolo: str, domanda: str, opzioni: list) -> str:
-    """Il messaggio della poll: titolo grande, domanda in grassetto, opzioni spaziate."""
+def build_poll_text(titolo: str, domanda: str, opzioni: list, ping_role=None) -> str:
+    """Il messaggio della poll: titolo grande, domanda in grassetto, opzioni spaziate.
+
+    `ping_role` (id) finisce in fondo, staccato come le opzioni.
+    """
     righe = "\n\n".join(f"{o['emoji']} {o['testo']}" for o in opzioni)
-    return f"# {titolo}\n**{domanda}**\n\n{righe}"
+    testo = f"# {titolo}\n**{domanda}**\n\n{righe}"
+    if ping_role:
+        testo += f"\n\n<@&{ping_role}>"
+    return testo
 
 
 # ── MODAL: titolo + domanda + opzioni ────────────────────────────────────────
@@ -278,7 +284,11 @@ class PollPublishButton(discord.ui.Button):
         titolo = v.titolo or t(config, "poll.auto_title", n=numero)
 
         try:
-            msg = await canale.send(build_poll_text(titolo, v.domanda, v.opzioni))
+            msg = await canale.send(
+                build_poll_text(titolo, v.domanda, v.opzioni, cfg.get("ping_role")),
+                # senza questo Discord mostrerebbe il tag senza notificare nessuno
+                allowed_mentions=discord.AllowedMentions(roles=True, everyone=False, users=False),
+            )
         except discord.Forbidden:
             await interaction.response.send_message(t(config, "poll.no_perm"), ephemeral=True)
             return
@@ -327,12 +337,14 @@ class PollPreviewView(discord.ui.View):
 
     def build_embed(self):
         config = db.get_log_config(self.guild.id)
-        numero = poll_cfg(config).get("counter", 0) + 1
+        cfg = poll_cfg(config)
+        numero = cfg.get("counter", 0) + 1
         titolo = self.titolo or t(config, "poll.auto_title", n=numero)
         ch = self.guild.get_channel(self.canale) if self.canale else None
         e = discord.Embed(
             title=t(config, "poll.preview_title"),
-            description=build_poll_text(titolo, self.domanda, self.opzioni),
+            description=build_poll_text(titolo, self.domanda, self.opzioni,
+                                        cfg.get("ping_role")),
             color=BLU,
         )
         e.add_field(name=t(config, "common.channel"),

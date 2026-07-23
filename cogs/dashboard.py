@@ -1996,10 +1996,25 @@ class PollChannelSelect(discord.ui.ChannelSelect):
         await interaction.response.edit_message(embed=v.build_embed(), view=v)
 
 
+class PollPingSelect(discord.ui.RoleSelect):
+    def __init__(self, current, config):
+        super().__init__(placeholder=t(config, "poll.ping_ph"),
+                         min_values=0, max_values=1, row=3,
+                         default_values=_dv([current] if current else [],
+                                            discord.SelectDefaultValueType.role))
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("poll", {})["ping_role"] = self.values[0].id if self.values else None
+        db.save_log_config(interaction.guild_id, config)
+        v = PollView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
 class PollResetButton(discord.ui.Button):
     def __init__(self, config):
         super().__init__(label=t(config, "poll.btn_reset"), emoji="🔄",
-                         style=discord.ButtonStyle.danger, row=3)
+                         style=discord.ButtonStyle.danger, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         config = db.get_log_config(interaction.guild_id)
@@ -2030,9 +2045,10 @@ class PollView(BaseView):
         feats = config.get("features", {})
         poll = config.get("poll", {})
         self.add_item(FeatureToggleButton("poll", feats.get("poll", True)))
+        self.add_item(PollResetButton(config))
         self.add_item(PollRolesSelect(poll.get("allowed_roles", []), config))
         self.add_item(PollChannelSelect(poll.get("channel"), config))
-        self.add_item(PollResetButton(config))
+        self.add_item(PollPingSelect(poll.get("ping_role"), config))
         self.add_item(BackButton("features"))
 
     def build_embed(self) -> discord.Embed:
@@ -2051,6 +2067,9 @@ class PollView(BaseView):
         ch = self.guild.get_channel(poll.get("channel")) if poll.get("channel") else None
         embed.add_field(name=t(config, "poll.channel_field"),
                         value=ch.mention if ch else t(config, "poll.channel_none"), inline=False)
+        ping = poll.get("ping_role")
+        embed.add_field(name=t(config, "poll.ping_field"),
+                        value=f"<@&{ping}>" if ping else t(config, "poll.ping_none"), inline=False)
         embed.add_field(name=t(config, "poll.counter"), value=f"**{prossimo}**", inline=False)
         return embed
 
