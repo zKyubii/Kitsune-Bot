@@ -62,6 +62,24 @@ STRINGS = {
     "poll.no_role": "❌ You don't have a role allowed to create polls.",
     "feat.poll": "📊 Poll",
 
+    # ── MODERATION overview + locks ─────────────────────────────────────────
+    "mod.sections": "Sections",
+    "mod.jail_ready": "✅ configured",
+    "mod.jail_not_ready": "❌ not set",
+    "mod.n_active": "{n} active",
+    "mod.n_roles": "{n} roles",
+    "mod.n_cats": "{n} categories",
+    "lock.status_locked_dm": "🔴 Locked — DMs paused",
+    "lock.status_open_dm": "🟢 Open — DMs allowed",
+    "lock.status_locked_join": "🔴 Locked — nobody can join",
+    "lock.status_open_join": "🟢 Open — anyone can join",
+    "lock.short_locked": "🔴 Locked",
+    "lock.short_open": "🟢 Open",
+    "lock.btn_lock_dm": "Lock DMs",
+    "lock.btn_unlock_dm": "Unlock DMs",
+    "lock.btn_lock_join": "Lock joins",
+    "lock.btn_unlock_join": "Unlock joins",
+
     # ── STAFF (PEX / DEPEX) ─────────────────────────────────────────────────
     "feat.staff": "🛡️ Staff (PEX)",
     "staff.section_label": "🛡️ Staff (PEX)",

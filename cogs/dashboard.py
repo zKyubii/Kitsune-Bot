@@ -505,7 +505,10 @@ class WarnActionsView(BaseView):
 
 class DMLockButton(discord.ui.Button):
     def __init__(self, attivo: bool):
-        super().__init__(label=_T("dash.dm_lock"), emoji="🔒",
+        # attivo = DM in pausa (lock ON). Il pulsante mostra l'AZIONE:
+        # se è bloccato → "Unlock" (verde, ripristina); se aperto → "Lock" (rosso).
+        super().__init__(label=_T("lock.btn_unlock_dm" if attivo else "lock.btn_lock_dm"),
+                         emoji="🔓" if attivo else "🔒",
                          style=discord.ButtonStyle.success if attivo else discord.ButtonStyle.danger, row=1)
 
     async def callback(self, interaction: discord.Interaction):
@@ -529,7 +532,9 @@ class DMLockButton(discord.ui.Button):
 
 class JoinLockButton(discord.ui.Button):
     def __init__(self, attivo: bool):
-        super().__init__(label=_T("dash.join_lock"), emoji="🚪",
+        # attivo = inviti in pausa (lock ON). Il pulsante mostra l'AZIONE.
+        super().__init__(label=_T("lock.btn_unlock_join" if attivo else "lock.btn_lock_join"),
+                         emoji="🔓" if attivo else "🔒",
                          style=discord.ButtonStyle.success if attivo else discord.ButtonStyle.danger, row=1)
 
     async def callback(self, interaction: discord.Interaction):
@@ -683,7 +688,7 @@ class DMLockView(BaseView):
         self.add_item(BackButton("mod"))
 
     def build_embed(self) -> discord.Embed:
-        stato = "🟢 In pausa" if self.guild.dms_paused() else _T("dash2.attivi")
+        stato = _T("lock.status_locked_dm") if self.guild.dms_paused() else _T("lock.status_open_dm")
         embed = discord.Embed(
             title=_T("dash.dm_lock2"),
             description=_T("dash.mette_pausa_dm_tra"),
@@ -699,7 +704,7 @@ class JoinLockView(BaseView):
         self.add_item(BackButton("mod"))
 
     def build_embed(self) -> discord.Embed:
-        stato = "🟢 In pausa" if self.guild.invites_paused() else _T("dash2.attivi")
+        stato = _T("lock.status_locked_join") if self.guild.invites_paused() else _T("lock.status_open_join")
         embed = discord.Embed(
             title=_T("dash.join_lock2"),
             description=_T("dash.mette_pausa_inviti_nessuno"),
@@ -741,22 +746,32 @@ class ModerationView(BaseView):
 
     def build_embed(self) -> discord.Embed:
         config = db.get_log_config(self.guild.id)
-        antispam = _T("dash2.attivo") if config.get("antispam", {}).get("enabled") else _T("dash2.disattivo")
-        dm = "🟢 In pausa" if self.guild.dms_paused() else _T("dash2.attivi")
-        join = "🟢 In pausa" if self.guild.invites_paused() else _T("dash2.attivi")
-        n_regole = len(config.get("warn_actions", []))
 
+        def onoff(b):
+            return _T("common.enabled" if b else "common.disabled")
+
+        jc = config.get("jail", {})
+        jail = _T("mod.jail_ready") if jc.get("role") and jc.get("channel") else _T("mod.jail_not_ready")
+        n_perm = sum(1 for v in config.get("mod_perms", {}).values() if v)
+        dm = _T("lock.short_locked") if self.guild.dms_paused() else _T("lock.short_open")
+        join = _T("lock.short_locked") if self.guild.invites_paused() else _T("lock.short_open")
+
+        righe = [
+            f"{_T('dash.antispam3')} — {onoff(config.get('antispam', {}).get('enabled', False))}",
+            f"{_T('dash.jail2')} — {jail}",
+            f"{_T('dash.regole_warn')} — {_T('mod.n_active', n=len(config.get('warn_actions', [])))}",
+            f"{_T('dash.autorole2')} — {_T('mod.n_roles', n=len(config.get('autoroles', [])))}",
+            f"{_T('dash.permessi2')} — {_T('mod.n_cats', n=n_perm)}",
+            f"{_T('staff.section_label')} — {onoff(config.get('features', {}).get('staff', True))}",
+            f"{_T('dash.dm_lock2')} — {dm}",
+            f"{_T('dash.join_lock2')} — {join}",
+        ]
         embed = discord.Embed(
             title=_T("dash.moderazione"),
             description=_T("dash.seleziona_cosa_configurare_dal"),
             color=BLU,
         )
-        embed.add_field(name=_T("dash.stato_rapido"), value=(
-            f"🚨 Antispam: {antispam}\n" +
-            f"🔒 DM Lock: {dm}\n" +
-            f"🚪 Join Lock: {join}\n" +
-            f"⚠️ Warn rules: {n_regole} active"
-        ), inline=False)
+        embed.add_field(name=_T("mod.sections"), value="\n".join(righe), inline=False)
         return embed
 
 
