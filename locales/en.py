@@ -18,6 +18,10 @@ STRINGS = {
     "dash.ph_example_greet": "☀️ Good morning {server}!",
     "dash.ph_category_example": "Region",
     "dash.ph_levelup_msg": "CONGRATS\nYou reached level {level}!",
+    "dash.configura_log": "Configure {cat} logs",
+    "dash.ruoli_autorizzati_ph": "{cat} — authorised roles...",
+    "dash.vale_permesso_nativo": "the native permission applies (anyone who sees it can use it).",
+    "dash.tutti_chi_lo_vede": "*everyone who can see it*",
     "lang.placeholder": "🌍 Bot language...",
 
     # ── HELP ────────────────────────────────────────────────────────────────

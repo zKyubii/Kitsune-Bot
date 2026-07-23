@@ -133,7 +133,7 @@ class EventiSelect(discord.ui.Select):
         config = db.get_log_config(guild_id)
         enabled = config.get("logs", {}).get(category, {}).get("events", {})
         options = [
-            discord.SelectOption(label=elabel, value=ek, default=enabled.get(ek, False))
+            discord.SelectOption(label=t(config, elabel), value=ek, default=enabled.get(ek, False))
             for ek, elabel in events.items()
         ]
         super().__init__(
@@ -393,9 +393,9 @@ class LogBlacklistView(BaseView):
                          _T("dash2.se_imposti_canale_segreto_vengono")),
             color=BLU,
         )
-        embed.add_field(name=_T("dash.canali_esclusi"), value=f"{len(chans)} canali" if chans else _T("dash2.nessuno"), inline=False)
+        embed.add_field(name=_T("dash.canali_esclusi"), value=f"{len(chans)} channels" if chans else _T("dash2.nessuno"), inline=False)
         embed.add_field(name=_T("dash.canale_segreto"),
-                        value=f"<#{secret}>" if secret else "Nessuno (i log vengono ignorati)", inline=False)
+                        value=f"<#{secret}>" if secret else "None (logs are ignored)", inline=False)
         return embed
 
 
@@ -415,10 +415,10 @@ class LogsMenuView(BaseView):
             ch = cat.get("channel")
             if ch:
                 attivi = sum(1 for v in cat.get("events", {}).values() if v)
-                stato = f"<#{ch}> • {attivi}/{len(events)} eventi attivi"
+                stato = f"<#{ch}> • {attivi}/{len(events)} events enabled"
             else:
                 stato = _T("dash2.non_configurato")
-            righe.append(f"**{label}** — {stato}")
+            righe.append(f"**{t(config, label)}** — {stato}")
         embed = discord.Embed(
             title=_T("dash.log"),
             description=_T("dash.scegli_categoria_dal_menu"),
@@ -444,11 +444,12 @@ class CategoryView(BaseView):
         eventi_cfg = cat.get("events", {}) if ch else {}
 
         righe = [
-            f"{'🟢' if eventi_cfg.get(ek, False) else '🔴'} {elabel}"
+            f"{'🟢' if eventi_cfg.get(ek, False) else '🔴'} {t(config, elabel)}"
             for ek, elabel in events.items()
         ]
-        embed = discord.Embed(title=f"Configura {label} Log", color=BLU)
-        embed.add_field(name=_T("dash.canale"), value=f"<#{ch}>" if ch else "❌ nessuno", inline=False)
+        embed = discord.Embed(title=t(config, "dash.configura_log", cat=t(config, label)), color=BLU)
+        embed.add_field(name=_T("dash.canale"),
+                        value=f"<#{ch}>" if ch else _T("dash2.non_impostato"), inline=False)
         embed.add_field(name=_T("dash.eventi"), value="\n".join(righe), inline=False)
         embed.set_footer(text=_T("dash.scegli_canale_spunta_eventi"))
         return embed
@@ -467,7 +468,7 @@ class QuoteSettingsView(BaseView):
         config = db.get_log_config(self.guild.id)
         attiva = _T("dash2.attiva") if config.get("features", {}).get("quote", True) else _T("dash2.disattivata")
         cid = config.get("quote_channel")
-        dove = f"<#{cid}> (canale fisso)" if cid else "Nel canale dove viene usato il comando"
+        dove = f"<#{cid}> (fixed channel)" if cid else "In the channel where the command is used"
         embed = discord.Embed(
             title=_T("dash.quote"),
             description=_T("dash.attiva_disattiva_funzione_scegli"),
@@ -671,7 +672,7 @@ class JailView(BaseView):
         log = self.guild.get_channel(jc.get("log_channel")) if jc.get("log_channel") else None
 
         if role and channel:
-            stato = f"✅ Configurato\n🎭 Ruolo: {role.mention}\n📁 Canale: {channel.mention}"
+            stato = f"✅ Configured\n🎭 Role: {role.mention}\n📁 Channel: {channel.mention}"
         else:
             stato = _T("dash2.non_configurato_premi_setup_crearlo")
         log_txt = log.mention if log else _T("dash2.non_impostato")
@@ -769,7 +770,7 @@ class ModerationView(BaseView):
             f"🚨 Antispam: {antispam}\n" +
             f"🔒 DM Lock: {dm}\n" +
             f"🚪 Join Lock: {join}\n" +
-            f"⚠️ Regole Warn: {n_regole} attive"
+            f"⚠️ Warn rules: {n_regole} active"
         ), inline=False)
         return embed
 
@@ -863,9 +864,9 @@ class AntispamView(BaseView):
         embed.add_field(name=_T("dash.canale_log"), value=log, inline=False)
         embed.add_field(
             name=_T("dash.whitelist2"),
-            value=(f"{len(wl.get('channels', []))} canali, " +
-                   f"{len(wl.get('roles', []))} ruoli, " +
-                   f"{len(wl.get('users', []))} utenti"),
+            value=(f"{len(wl.get('channels', []))} channels, " +
+                   f"{len(wl.get('roles', []))} roles, " +
+                   f"{len(wl.get('users', []))} users"),
             inline=False,
         )
         return embed
@@ -1127,16 +1128,18 @@ class AutoroleView(BaseView):
 
 
 # ── PERMESSI MOD (per categoria: lock / jail / warn) ──────────────────────────
+# Valori = CHIAVI: risolte al rendering, non all'import (altrimenti la lingua
+# resterebbe congelata a quella di default).
 MOD_PERM_CATS = {
-    "lock": (_T("dash2.lock_canali"), "lock / unlock"),
-    "jail": (_T("dash2.jail"), _T("dash2.jail_unjail_jailed")),
-    "warn": (_T("dash2.warn"), _T("dash2.warn_warnings_delwarn_clearwarns")),
+    "lock": ("dash2.lock_canali", "lock / unlock"),
+    "jail": ("dash2.jail", "dash2.jail_unjail_jailed"),
+    "warn": ("dash2.warn", "dash2.warn_warnings_delwarn_clearwarns"),
 }
 
 
 class ModPermSelect(discord.ui.RoleSelect):
     def __init__(self, categoria, label, ids, row):
-        super().__init__(placeholder=f"{label} — ruoli autorizzati...",
+        super().__init__(placeholder=_T("dash.ruoli_autorizzati_ph", cat=_T(label)),
                          min_values=0, max_values=15, row=row,
                          default_values=_dv(ids, discord.SelectDefaultValueType.role))
         self.categoria = categoria
@@ -1165,7 +1168,7 @@ class PermissionsView(BaseView):
                 _T("dash2.tra_chi_vede_comandi_ha") +
                 _T("dash2.possono_davvero_usarli_categoria_n") +
                 _T("dash2.amministratori_possono_sempre_se_categoria") +
-                "vale il permesso nativo (chiunque lo veda può usarlo)."
+                _T("dash.vale_permesso_nativo")
             ),
             color=BLU,
         )
@@ -1173,8 +1176,8 @@ class PermissionsView(BaseView):
             ids = perms.get(cat, [])
             ruoli = [self.guild.get_role(r) for r in ids]
             ruoli = [r.mention for r in ruoli if r]
-            valore = " ".join(ruoli) if ruoli else "*tutti quelli che lo vedono*"
-            embed.add_field(name=f"{label}  ·  `{comandi}`", value=valore, inline=False)
+            valore = " ".join(ruoli) if ruoli else _T("dash.tutti_chi_lo_vede")
+            embed.add_field(name=f"{_T(label)}  ·  `{_T(comandi)}`", value=valore, inline=False)
         return embed
 
 
@@ -1613,7 +1616,7 @@ class AutoReactManageSelect(discord.ui.Select):
                 modo = "esatta" if r.get("mode") == "exact" else "contiene"
                 lab = f"'{r.get('trigger')}' ({modo}) → {emo}"
             options.append(discord.SelectOption(label=lab[:100], value=str(r.get("id"))))
-        ph = (f"✏️ Modifica una reaction — pag {page + 1}/{tot}"
+        ph = (f"✏️ Edit a reaction — page {page + 1}/{tot}"
               if tot > 1 else _T("dash2.modifica_reaction"))
         super().__init__(placeholder=ph, options=options or [discord.SelectOption(label="—")], row=2)
 
@@ -1794,7 +1797,7 @@ class RuleEditView(BaseView):
         r = _autoreact_get(db.get_log_config(self.guild.id), self.rule_id) or {}
         emo = " ".join(r.get("emojis", [])) or _T("dash2.nessuna_scegline_dal_menu")
         if r.get("type") == "mention":
-            quando = f"quando viene pingato <@{r.get('trigger')}>"
+            quando = f"when <@{r.get('trigger')}> gets pinged"
         else:
             modo = _T("dash2.solo_parola_esatta") if r.get("mode") == "exact" else _T("dash2.se_parola_contenuta")
             quando = f"parola `{r.get('trigger')}` ({modo})"
@@ -1847,7 +1850,7 @@ class AutoReactView(BaseView):
         embed.add_field(name=_T("dash.stato"), value=attiva, inline=False)
         embed.add_field(name=_T("dash.regole"), value="\n".join(righe)[:1000] if righe else _T("dash2.nessuna"), inline=False)
         bl = ar.get("blacklist_channels", [])
-        embed.add_field(name=_T("dash.canali_esclusi2"), value=f"{len(bl)} canali" if bl else _T("dash2.nessuno"), inline=False)
+        embed.add_field(name=_T("dash.canali_esclusi2"), value=f"{len(bl)} channels" if bl else _T("dash2.nessuno"), inline=False)
         return embed
 
 
@@ -2124,9 +2127,9 @@ class ProfileDashView(BaseView):
             color=BLU,
         )
         embed.add_field(name=_T("dash.stato"), value=attiva, inline=False)
-        embed.add_field(name=_T("dash.bypass_privacy"), value=f"{len(bypass)} ruoli", inline=True)
+        embed.add_field(name=_T("dash.bypass_privacy"), value=f"{len(bypass)} roles", inline=True)
         embed.add_field(name=_T("dash.vocali_private"), value=f"{len(voices)} assegnate", inline=True)
-        embed.add_field(name=_T("dash.custom_reactions"), value=f"{len(allowed)} ruoli", inline=True)
+        embed.add_field(name=_T("dash.custom_reactions"), value=f"{len(allowed)} roles", inline=True)
         embed.add_field(name=_T("dash.ruoli_primari"), value=f"{len(primary)} assegnati", inline=True)
         embed.set_footer(text=_T("dash.scegli_sotto_sezione_dal"))
         return embed
@@ -2212,8 +2215,8 @@ class PrivateVoiceRemoveSelect(discord.ui.Select):
         for cid, uid in list(voices.items())[:25]:
             ch = guild.get_channel(int(cid))
             options.append(discord.SelectOption(
-                label=(ch.name if ch else f"canale {cid}")[:80], value=str(cid),
-                description=f"Assegnata a un utente ({uid})"))
+                label=(ch.name if ch else f"channel {cid}")[:80], value=str(cid),
+                description=f"Assigned to a user ({uid})"))
         super().__init__(placeholder=_T("dash.rimuovi_assegnazione"), row=3,
                          options=options or [discord.SelectOption(label="—", value="_")],
                          disabled=not options)
@@ -2244,7 +2247,7 @@ class PrivateVoiceView(BaseView):
             righe = []
             for cid, uid in voices.items():
                 ch = self.guild.get_channel(int(cid))
-                nome = ch.mention if ch else f"`canale {cid}`"
+                nome = ch.mention if ch else f"`channel {cid}`"
                 righe.append(f"{nome} → <@{uid}>")
             testo = "\n".join(righe)
         else:
@@ -2372,7 +2375,7 @@ class PrimaryRoleAssignButton(discord.ui.Button):
 
 class PrimaryRoleRemoveSelect(discord.ui.Select):
     def __init__(self, primary):
-        options = [discord.SelectOption(label=f"utente {uid}", value=str(uid))
+        options = [discord.SelectOption(label=f"user {uid}", value=str(uid))
                    for uid in list(primary.keys())[:25]]
         super().__init__(placeholder=_T("dash.rimuovi_assegnazione"), row=3,
                          options=options or [discord.SelectOption(label="—", value="_")],
@@ -2476,7 +2479,7 @@ class CategoryEditSelect(discord.ui.Select):
     def __init__(self, cats):
         options = [discord.SelectOption(label=c.get("name", "Categoria")[:100], value=cid,
                                         emoji=_dash_emoji(c.get("emoji")),
-                                        description=f"{len(c.get('roles', []))} ruoli")
+                                        description=f"{len(c.get('roles', []))} roles")
                    for cid, c in list(cats.items())[:25]]
         super().__init__(placeholder=_T("dash.modifica_categoria"), options=options, row=1)
 
@@ -2498,7 +2501,7 @@ class RoleCategoriesView(BaseView):
         cats = db.get_log_config(self.guild.id).get("profile", {}).get("role_categories", {})
         if cats:
             righe = [f"{c.get('emoji', '')} **{c.get('name', '—')}** — " +
-                     f"{len(c.get('roles', []))} ruoli " +
+                     f"{len(c.get('roles', []))} roles " +
                      f"({'singola' if c.get('single') else 'multipla'})"
                      for c in cats.values()]
             testo = "\n".join(righe)
@@ -2587,7 +2590,7 @@ class RoleCategoryEditView(BaseView):
         roles = cat.get("roles", [])
         testo = " ".join(f"<@&{r}>" for r in roles) if roles else "*Nessuno*"
         embed = discord.Embed(
-            title=f"{cat.get('emoji', '')} {cat.get('name', 'Categoria')}".strip(),
+            title=f"{cat.get('emoji', '')} {cat.get('name', 'Category')}".strip(),
             description=_T("dash.scegli_ruoli_tipo_scelta"),
             color=BLU,
         )
@@ -2792,7 +2795,7 @@ class CurveRemoveSelect(discord.ui.Select):
     def __init__(self, curve):
         options = []
         for lvl, xp in sorted(curve.items(), key=lambda x: int(x[0]))[:25]:
-            options.append(discord.SelectOption(label=f"Livello {lvl} → {xp} XP"[:100], value=str(lvl)))
+            options.append(discord.SelectOption(label=f"Level {lvl} → {xp} XP"[:100], value=str(lvl)))
         super().__init__(placeholder=_T("dash.rimuovi_livello"), options=options, row=1)
 
     async def callback(self, interaction: discord.Interaction):
@@ -2823,7 +2826,7 @@ class LevelCurveView(BaseView):
             testo = "\n".join(f"**Lv {lvl}** → `{xp}` XP per salire" for lvl, xp in items)
         else:
             head = "\n".join(f"**Lv {lvl}** → `{xp}`" for lvl, xp in items[:8])
-            testo = f"{head}\n… e altri **{len(items) - 8}** livelli impostati"
+            testo = f"{head}\n… and **{len(items) - 8}** more levels set"
         embed = discord.Embed(
             title=_T("dash.curva_xp_manuale"),
             description=(_T("dash2.imposti_tu_livello_livello_quanti") +
@@ -2831,7 +2834,7 @@ class LevelCurveView(BaseView):
                          _T("dash2.livelli_senza_valore_usano_quello")),
             color=BLU,
         )
-        embed.add_field(name=f"Livelli impostati ({len(items)})", value=testo, inline=False)
+        embed.add_field(name=f"Levels set ({len(items)})", value=testo, inline=False)
         return embed
 
 
@@ -2920,7 +2923,7 @@ class LevelUpView(BaseView):
         embed.add_field(name=_T("dash.canale2"), value=dove, inline=False)
         embed.add_field(name=_T("dash.titolo2"), value=f"```{(c['levelup_title'] or '—')[:250]}```", inline=False)
         embed.add_field(name=_T("dash.testo2"), value=f"```{(c['levelup_message'] or '—')[:500]}```", inline=False)
-        embed.add_field(name=_T("dash.colore"), value=f"`#{c['levelup_color']}`" if c['levelup_color'] else "Automatico (colore ruolo)", inline=False)
+        embed.add_field(name=_T("dash.colore"), value=f"`#{c['levelup_color']}`" if c['levelup_color'] else "Automatic (role colour)", inline=False)
         return embed
 
 
@@ -2931,7 +2934,7 @@ class RewardLevelModal(discord.ui.Modal, title=_T("dash.ruolo_premio")):
         self.author_id = author_id
         self.guild = guild
         self.role = role
-        self.livello = discord.ui.TextInput(label=f"Livello per {role.name}", placeholder="es. 10", max_length=4)
+        self.livello = discord.ui.TextInput(label=f"Level for {role.name}", placeholder="es. 10", max_length=4)
         self.add_item(self.livello)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -2959,8 +2962,8 @@ class RewardRemoveSelect(discord.ui.Select):
         options = []
         for lvl, rid in sorted(rewards.items(), key=lambda x: int(x[0])):
             role = guild.get_role(rid)
-            nome = role.name if role else f"ruolo {rid}"
-            options.append(discord.SelectOption(label=f"Livello {lvl} → {nome}"[:100], value=str(lvl)))
+            nome = role.name if role else f"role {rid}"
+            options.append(discord.SelectOption(label=f"Level {lvl} → {nome}"[:100], value=str(lvl)))
         super().__init__(placeholder=_T("dash.rimuovi_premio"), options=options, row=1)
 
     async def callback(self, interaction: discord.Interaction):
@@ -3008,7 +3011,7 @@ class MultiplierValueModal(discord.ui.Modal, title=_T("dash.multiplier_ruolo")):
         self.author_id = author_id
         self.guild = guild
         self.role = role
-        self.valore = discord.ui.TextInput(label=f"Moltiplicatore per {role.name}", placeholder="es. 2 o 1.5",
+        self.valore = discord.ui.TextInput(label=f"Multiplier for {role.name}", placeholder="es. 2 o 1.5",
                                            max_length=6)
         self.add_item(self.valore)
 
@@ -3040,7 +3043,7 @@ class MultiplierRemoveSelect(discord.ui.Select):
         options = []
         for rid, val in mult.items():
             role = guild.get_role(int(rid))
-            nome = role.name if role else f"ruolo {rid}"
+            nome = role.name if role else f"role {rid}"
             options.append(discord.SelectOption(label=f"{nome} ×{val}"[:100], value=str(rid)))
         super().__init__(placeholder=_T("dash.rimuovi_multiplier"), options=options, row=1)
 
@@ -3138,13 +3141,13 @@ class LevelBlacklistView(BaseView):
             color=BLU,
         )
         embed.add_field(name=_T("dash.ruoli_esclusi"),
-                        value=f"{len(c.get('blacklist_roles', []))} ruoli" if c.get("blacklist_roles") else _T("dash2.nessuno"),
+                        value=f"{len(c.get('blacklist_roles', []))} roles" if c.get("blacklist_roles") else _T("dash2.nessuno"),
                         inline=True)
         embed.add_field(name=_T("dash.utenti_esclusi"),
-                        value=f"{len(c.get('blacklist_users', []))} utenti" if c.get("blacklist_users") else _T("dash2.nessuno"),
+                        value=f"{len(c.get('blacklist_users', []))} users" if c.get("blacklist_users") else _T("dash2.nessuno"),
                         inline=True)
         embed.add_field(name=_T("dash.canali_esclusi"),
-                        value=f"{len(c.get('blacklist_channels', []))} canali" if c.get("blacklist_channels") else _T("dash2.nessuno"),
+                        value=f"{len(c.get('blacklist_channels', []))} channels" if c.get("blacklist_channels") else _T("dash2.nessuno"),
                         inline=True)
         return embed
 

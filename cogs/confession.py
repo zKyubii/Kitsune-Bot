@@ -42,7 +42,7 @@ class ConfessionPromptView(discord.ui.View):
         super().__init__(timeout=None)
         self.cog = cog
 
-    @discord.ui.button(label="Invia una confessione!", emoji="🤫",
+    @discord.ui.button(label="Send a confession!", emoji="🤫",
                        style=discord.ButtonStyle.secondary, custom_id="confession:new")
     async def nuova(self, interaction: discord.Interaction, button: discord.ui.Button):
         config = db.get_log_config(interaction.guild_id)
@@ -95,12 +95,12 @@ class Confession(commands.Cog):
         if not log_ch:
             return
         embed = discord.Embed(
-            title=f"🕵️ Log confessione #{numero}",
+            title=f"🕵️ Confession log #{numero}",
             description=testo,
             color=discord.Color.dark_grey(),
             timestamp=datetime.datetime.now(datetime.timezone.utc),
         )
-        embed.add_field(name="Autore", value=f"{autore.mention} (`{autore.id}`)")
+        embed.add_field(name="Author", value=f"{autore.mention} (`{autore.id}`)")
         embed.set_thumbnail(url=autore.display_avatar.url)
         try:
             await log_ch.send(embed=embed)
@@ -118,12 +118,12 @@ class Confession(commands.Cog):
 
         numero = db.next_confession_number(guild.id)
         embed = discord.Embed(
-            title=f"🤫 Confessione #{numero}",
+            title=f"🤫 Confession #{numero}",
             description=testo,
             color=GIALLO,
             timestamp=datetime.datetime.now(datetime.timezone.utc),
         )
-        embed.set_footer(text="Anonimo")
+        embed.set_footer(text="Anonymous")
 
         # Sposta il pulsante: lo tolgo dalla confessione precedente
         vecchio = self.last_msg.get(guild.id)

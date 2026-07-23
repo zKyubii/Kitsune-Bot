@@ -111,7 +111,7 @@ def build_role_view(data: dict, guild) -> discord.ui.View | None:
             options = []
             for o in comp.get("options", []):
                 role = guild.get_role(o["role"]) if guild else None
-                label = o.get("label") or (role.name if role else f"Ruolo {o['role']}")
+                label = o.get("label") or (role.name if role else f"Role {o['role']}")
                 options.append(discord.SelectOption(
                     label=label[:100], value=str(o["role"]),
                     description=(o.get("description") or None),
@@ -133,7 +133,7 @@ def build_role_view(data: dict, guild) -> discord.ui.View | None:
                 label = b.get("label") or (role.name if role else None)
                 emoji = _parse_emoji(b.get("emoji"))
                 if not label and not emoji:
-                    label = f"Ruolo {b['role']}"
+                    label = f"Role {b['role']}"
                 view.add_item(discord.ui.Button(
                     label=label, emoji=emoji,
                     style=_STYLE_MAP.get(b.get("style", "secondary"), discord.ButtonStyle.secondary),
@@ -189,7 +189,7 @@ async def _apply_button(interaction, role_id):
     try:
         if role in member.roles:
             await member.remove_roles(role, reason="Self-role button")
-            await interaction.response.send_message(f"➖ Rimosso {role.mention}", ephemeral=True)
+            await interaction.response.send_message(f"➖ Removed {role.mention}", ephemeral=True)
         else:
             await member.add_roles(role, reason="Self-role button")
             await interaction.response.send_message(f"➕ Aggiunto {role.mention}", ephemeral=True)
@@ -430,7 +430,7 @@ class OptionEditView(discord.ui.View):
                 f"• Etichetta: **{o.get('label') or '—'}**\n" +
                 f"• Emoji: {o.get('emoji') or '—'}\n" +
                 f"• Descrizione: {o.get('description') or '—'}\n" +
-                f"• Ruolo: <@&{o.get('role')}>\n\n" +
+                f"• Role: <@&{o.get('role')}>\n\n" +
                 _T("eb.cambia_ruolo_col_menu_o2"))
 
 
@@ -541,7 +541,7 @@ class MenuBuilderView(discord.ui.View):
             em = (o["emoji"] + " ") if o.get("emoji") else ""
             righe.append(f"{i + 1}. {em}{o.get('label') or '—'} → <@&{o['role']}>")
         modo = "scelta singola" if self.single else "scelta multipla"
-        righe.append(f"\n_Segnaposto: {self.placeholder or 'Seleziona un ruolo…'} · {modo}_")
+        righe.append(f"\n_Segnaposto: {self.placeholder or 'Select a role…'} · {modo}_")
         righe.append(_T("eb.aggiungi_modifica_opzione_poi_salva"))
         return "\n".join(righe)
 
@@ -654,7 +654,7 @@ class ButtonEditView(discord.ui.View):
                 f"• Etichetta: **{b.get('label') or '—'}**\n" +
                 f"• Emoji: {b.get('emoji') or '—'}\n" +
                 f"• Colore: {_STYLE_LABELS.get(b.get('style'))}\n" +
-                f"• Ruolo: <@&{b.get('role')}>\n\n" +
+                f"• Role: <@&{b.get('role')}>\n\n" +
                 _T("eb.cambia_ruolo_col_menu_o"))
 
 
@@ -752,10 +752,10 @@ class ComponentPickSelect(discord.ui.Select):
         for i, c in enumerate(builder.data.get("components", [])):
             if c.get("type") == "select":
                 options.append(discord.SelectOption(
-                    label=f"{i + 1}. Menu a tendina • {len(c.get('options', []))} ruoli", value=str(i), emoji="🎭"))
+                    label=f"{i + 1}. Dropdown • {len(c.get('options', []))} roles", value=str(i), emoji="🎭"))
             else:
                 options.append(discord.SelectOption(
-                    label=f"{i + 1}. Pulsanti • {len(c.get('buttons', []))} ruoli", value=str(i), emoji="🔘"))
+                    label=f"{i + 1}. Buttons • {len(c.get('buttons', []))} roles", value=str(i), emoji="🔘"))
         super().__init__(placeholder=_T("eb.scegli_componente_modificare"),
                          options=options or [discord.SelectOption(label="—")], min_values=1, max_values=1)
 
@@ -933,6 +933,7 @@ class EmbedBuilder(commands.Cog):
 
     @gruppo.command(name="create", description="Create a new embed and open it in the editor")
     @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.rename(nome="name")
     async def create(self, interaction: discord.Interaction, nome: str):
         if db.get_embed(interaction.guild_id, nome) is not None:
             await interaction.response.send_message(
@@ -971,18 +972,20 @@ class EmbedBuilder(commands.Cog):
 
     @gruppo.command(name="delete", description="Delete a saved embed")
     @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.rename(nome="name")
     async def delete(self, interaction: discord.Interaction, nome: str):
         if db.delete_embed(interaction.guild_id, nome):
             await interaction.response.send_message(f"🗑️ Embed `{nome}` eliminato.", ephemeral=True)
         else:
-            await interaction.response.send_message(f"❌ Nessun embed chiamato `{nome}`.", ephemeral=True)
+            await interaction.response.send_message(f"❌ No embed named `{nome}`.", ephemeral=True)
 
     @gruppo.command(name="send", description="Send a saved embed to a channel")
     @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.rename(nome="name", canale="channel")
     async def send(self, interaction: discord.Interaction, nome: str, canale: discord.TextChannel = None):
         data = db.get_embed(interaction.guild_id, nome)
         if data is None:
-            await interaction.response.send_message(f"❌ Nessun embed chiamato `{nome}`.", ephemeral=True)
+            await interaction.response.send_message(f"❌ No embed named `{nome}`.", ephemeral=True)
             return
         canale = canale or interaction.channel
         await canale.send(embed=costruisci_embed(data, guild=interaction.guild),

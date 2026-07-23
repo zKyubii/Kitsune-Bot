@@ -13,8 +13,8 @@ altre: una migrazione a metà non rompe mai un messaggio.
 from . import it, en
 
 # Lingua usata quando un server non ne ha scelta una.
-# Quando il bot diventerà pubblico basta cambiare questa riga in "en".
-DEFAULT_LANG = "it"
+# Inglese: è anche quella su cui ripiegano le chiavi non ancora tradotte.
+DEFAULT_LANG = "en"
 
 LANGS = {"it": it.STRINGS, "en": en.STRINGS}
 LANG_NAMES = {"it": "🇮🇹 Italiano", "en": "🇬🇧 English"}

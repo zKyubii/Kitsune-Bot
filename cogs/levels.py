@@ -101,9 +101,9 @@ class Levels(commands.Cog):
                 to_remove.append(role)
         try:
             if to_add:
-                await member.add_roles(*to_add, reason="Ricompensa livello")
+                await member.add_roles(*to_add, reason="Level reward")
             if to_remove:
-                await member.remove_roles(*to_remove, reason="Ricompensa livello")
+                await member.remove_roles(*to_remove, reason="Level reward")
         except discord.HTTPException:
             pass
 
@@ -247,6 +247,7 @@ class Levels(commands.Cog):
 
     @level_group.command(name="give", description="Give XP to a user")
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.rename(utente="user", quantita="amount")
     async def give(self, interaction: discord.Interaction, utente: discord.Member, quantita: int):
         new = db.add_xp(interaction.guild_id, utente.id, quantita)
         await self._post_change(interaction.guild_id, utente)
@@ -261,6 +262,7 @@ class Levels(commands.Cog):
 
     @level_group.command(name="giverole", description="Give XP to every member with a role")
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.rename(ruolo="role", quantita="amount")
     async def giverole(self, interaction: discord.Interaction, ruolo: discord.Role, quantita: int):
         await interaction.response.defer(ephemeral=True)
         n = 0
@@ -276,6 +278,7 @@ class Levels(commands.Cog):
 
     @level_group.command(name="set", description="Set a user's total XP")
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.rename(utente="user")
     async def set_cmd(self, interaction: discord.Interaction, utente: discord.Member, xp: int):
         db.set_xp(interaction.guild_id, utente.id, xp)
         await self._post_change(interaction.guild_id, utente)
@@ -286,6 +289,7 @@ class Levels(commands.Cog):
 
     @level_group.command(name="reset", description="Reset a user's XP")
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.rename(utente="user")
     async def reset(self, interaction: discord.Interaction, utente: discord.Member):
         db.reset_level_user(interaction.guild_id, utente.id)
         await self._post_change(interaction.guild_id, utente)

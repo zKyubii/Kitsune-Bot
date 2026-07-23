@@ -12,7 +12,7 @@ async def _privacy_stop(ctx, target, kind: str) -> bool:
         return False
     if privacy_notify(target):
         etichetta = "l'avatar" if kind == "avatar" else "il banner"
-        await ctx.send(f"🔒 {target.display_name} ha la privacy attiva su {etichetta}.")
+        await ctx.send(f"🔒 {target.display_name} has privacy enabled on {etichetta}.")
     return True
 
 
@@ -38,7 +38,7 @@ class Avatar(commands.Cog):
     @commands.command(name="av")
     @commands.guild_only()
     async def av(self, ctx: commands.Context, target: discord.Member = None):
-        """Avatar del SERVER (quello che hai nel server)."""
+        """SERVER avatar (the one you have in this server)."""
         target = target or ctx.author
         if await _privacy_stop(ctx, target, "avatar"):
             return
@@ -47,7 +47,7 @@ class Avatar(commands.Cog):
     @commands.command(name="avuser")
     @commands.guild_only()
     async def avuser(self, ctx: commands.Context, target: discord.Member = None):
-        """Avatar del PROFILO (globale)."""
+        """PROFILE avatar (global)."""
         target = target or ctx.author
         if await _privacy_stop(ctx, target, "avatar"):
             return
@@ -58,7 +58,7 @@ class Avatar(commands.Cog):
     @commands.command(name="banner")
     @commands.guild_only()
     async def banner(self, ctx: commands.Context, target: discord.Member = None):
-        """Banner del SERVER (se impostato), altrimenti quello del profilo."""
+        """SERVER banner (if set), otherwise the profile one."""
         target = target or ctx.author
         if await _privacy_stop(ctx, target, "banner"):
             return
@@ -76,7 +76,7 @@ class Avatar(commands.Cog):
     @commands.command(name="banneruser")
     @commands.guild_only()
     async def banneruser(self, ctx: commands.Context, target: discord.Member = None):
-        """Banner del PROFILO (globale)."""
+        """PROFILE banner (global)."""
         target = target or ctx.author
         if await _privacy_stop(ctx, target, "banner"):
             return

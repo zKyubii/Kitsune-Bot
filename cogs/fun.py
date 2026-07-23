@@ -508,8 +508,8 @@ class PairView(discord.ui.View):
     async def pair(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.u1.id == self.u2.id:
             await interaction.response.send_message(
-                "💍 Non puoi sposare te stesso! L'autostima è importante, "
-                "ma per sposarti serve qualcun altro 😄", ephemeral=True)
+                "💍 You can't marry yourself! Self-esteem matters, "
+                "but you need someone else to marry 😄", ephemeral=True)
             return
         if interaction.user.id not in (self.u1.id, self.u2.id):
             await interaction.response.send_message(

@@ -50,6 +50,7 @@ class Roles(commands.Cog):
     # ── ADD ─────────────────────────────────────────────────────────────────────
     @gruppo.command(name="add", description="Add a role to a user")
     @app_commands.checks.has_permissions(manage_roles=True)
+    @app_commands.rename(utente="user", ruolo="role")
     async def add(self, interaction: discord.Interaction, utente: discord.Member, ruolo: discord.Role):
         err = _puo_assegnare(interaction, ruolo)
         if err:
@@ -64,6 +65,7 @@ class Roles(commands.Cog):
     # ── REMOVE ──────────────────────────────────────────────────────────────────
     @gruppo.command(name="remove", description="Remove a role from a user")
     @app_commands.checks.has_permissions(manage_roles=True)
+    @app_commands.rename(utente="user", ruolo="role")
     async def remove(self, interaction: discord.Interaction, utente: discord.Member, ruolo: discord.Role):
         err = _puo_assegnare(interaction, ruolo)
         if err:
@@ -110,6 +112,7 @@ class Roles(commands.Cog):
     @gruppo.command(name="all", description="Give (or remove) a role to ALL members")
     @app_commands.choices(azione=_AZIONI)
     @app_commands.checks.has_permissions(manage_roles=True)
+    @app_commands.rename(ruolo="role", azione="action")
     async def all(self, interaction: discord.Interaction, ruolo: discord.Role,
                   azione: app_commands.Choice[str] = None):
         await self._massa(interaction, ruolo, azione, lambda m: True, "membri")
@@ -117,6 +120,7 @@ class Roles(commands.Cog):
     @gruppo.command(name="humans", description="Give (or remove) a role to humans only (no bots)")
     @app_commands.choices(azione=_AZIONI)
     @app_commands.checks.has_permissions(manage_roles=True)
+    @app_commands.rename(ruolo="role", azione="action")
     async def humans(self, interaction: discord.Interaction, ruolo: discord.Role,
                      azione: app_commands.Choice[str] = None):
         await self._massa(interaction, ruolo, azione, lambda m: not m.bot, "utenti")
@@ -124,6 +128,7 @@ class Roles(commands.Cog):
     @gruppo.command(name="bots", description="Give (or remove) a role to bots only")
     @app_commands.choices(azione=_AZIONI)
     @app_commands.checks.has_permissions(manage_roles=True)
+    @app_commands.rename(ruolo="role", azione="action")
     async def bots(self, interaction: discord.Interaction, ruolo: discord.Role,
                    azione: app_commands.Choice[str] = None):
         await self._massa(interaction, ruolo, azione, lambda m: m.bot, "bot")

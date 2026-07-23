@@ -183,7 +183,7 @@ class Moderation(commands.Cog):
                 continue  # bot non più in quel server: riproviamo più avanti
             try:
                 user = await self.bot.fetch_user(row["user_id"])
-                await guild.unban(user, reason=f"Ban temporaneo scaduto ({row['reason'] or ''})".strip())
+                await guild.unban(user, reason=f"Temporary ban expired ({row['reason'] or ''})".strip())
             except discord.NotFound:
                 pass  # già sbannato a mano: ripuliamo comunque il record
             except discord.HTTPException:
@@ -224,7 +224,7 @@ class Moderation(commands.Cog):
         self,
         interaction: discord.Interaction,
         membro: discord.Member,
-        motivo: str = "Nessun motivo specificato",
+        motivo: str = "No reason specified",
         durata: str = None,
         proof: discord.Attachment = None,
         soft_ban: bool = False,
@@ -255,7 +255,7 @@ class Moderation(commands.Cog):
 
         if soft_ban:
             self._remember_mod(interaction.guild_id, "unban", membro.id, interaction.user)
-            await interaction.guild.unban(membro, reason="Soft ban — pulizia messaggi")
+            await interaction.guild.unban(membro, reason="Soft ban — message cleanup")
             embed = build_mod_embed(
                 "Soft Ban", "Soft Banned", membro, interaction.user, COLORI["softban"],
                 motivo=motivo, extra=extra, proof=proof,
@@ -280,7 +280,7 @@ class Moderation(commands.Cog):
         self,
         interaction: discord.Interaction,
         utente_id: str,
-        motivo: str = "Nessun motivo specificato",
+        motivo: str = "No reason specified",
         proof: discord.Attachment = None,
     ):
         await interaction.response.defer()
@@ -309,7 +309,7 @@ class Moderation(commands.Cog):
         self,
         interaction: discord.Interaction,
         utente_id: str,
-        motivo: str = "Nessun motivo specificato",
+        motivo: str = "No reason specified",
         proof: discord.Attachment = None,
     ):
         await interaction.response.defer()
@@ -337,7 +337,7 @@ class Moderation(commands.Cog):
         self,
         interaction: discord.Interaction,
         membro: discord.Member,
-        motivo: str = "Nessun motivo specificato",
+        motivo: str = "No reason specified",
         proof: discord.Attachment = None,
     ):
         ok, errore = gerarchia_ok(interaction, membro)
@@ -364,7 +364,7 @@ class Moderation(commands.Cog):
         interaction: discord.Interaction,
         membro: discord.Member,
         durata: str,
-        motivo: str = "Nessun motivo specificato",
+        motivo: str = "No reason specified",
         proof: discord.Attachment = None,
     ):
         ok, errore = gerarchia_ok(interaction, membro)
@@ -399,6 +399,7 @@ class Moderation(commands.Cog):
     @app_commands.command(name="untimeout", description="Remove a user's timeout")
     @app_commands.default_permissions(moderate_members=True)
     @app_commands.checks.has_permissions(moderate_members=True)
+    @app_commands.rename(membro="member")
     async def untimeout(self, interaction: discord.Interaction, membro: discord.Member):
         self._remember_mod(interaction.guild_id, "timeout", membro.id, interaction.user)
         await membro.timeout(None)
@@ -535,7 +536,7 @@ class Moderation(commands.Cog):
             if proof.content_type and proof.content_type.startswith("image"):
                 embed.set_image(url=proof_url)
         if auto:
-            embed.add_field(name="⚙️ Azione automatica", value=auto, inline=False)
+            embed.add_field(name="⚙️ Automatic action", value=auto, inline=False)
 
         await interaction.response.send_message(embed=embed)
 
@@ -543,7 +544,7 @@ class Moderation(commands.Cog):
         try:
             dm = discord.Embed(
                 title=_t(interaction, "mod.warn_dm_title", guild=interaction.guild.name),
-                description=f"📋 **Motivo:** {motivo}",
+                description=f"📋 **Reason:** {motivo}",
                 color=0xF1C40F,
             )
             await membro.send(embed=dm)
@@ -554,6 +555,7 @@ class Moderation(commands.Cog):
     @app_commands.command(name="warnings", description="Show a user's warns")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("warn")
+    @app_commands.rename(membro="member")
     async def warnings(self, interaction: discord.Interaction, membro: discord.Member):
         warns = db.get_warnings(interaction.guild_id, membro.id)
         if not warns:
@@ -589,6 +591,7 @@ class Moderation(commands.Cog):
     @app_commands.command(name="clearwarns", description="Clear all of a user's warns")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("warn")
+    @app_commands.rename(membro="member")
     async def clearwarns(self, interaction: discord.Interaction, membro: discord.Member):
         quanti = db.clear_warnings(interaction.guild_id, membro.id)
         if quanti:
@@ -610,7 +613,7 @@ class Moderation(commands.Cog):
             if azione == "timeout":
                 await membro.timeout(datetime.timedelta(seconds=regola["seconds"]),
                                      reason=f"Auto: raggiunti {totale} warn")
-                return f"⏱️ Timeout automatico ({format_seconds(regola['seconds'])})"
+                return f"⏱️ Automatic timeout ({format_seconds(regola['seconds'])})"
             elif azione == "kick":
                 await membro.kick(reason=f"Auto: raggiunti {totale} warn")
                 return "👢 Kick automatico"
@@ -618,23 +621,24 @@ class Moderation(commands.Cog):
                 await membro.ban(reason=f"Auto: raggiunti {totale} warn")
                 return "🔨 Ban automatico"
         except discord.HTTPException:
-            return "⚠️ Azione automatica non riuscita (permessi o ruolo troppo alto)"
+            return "⚠️ Automatic action failed (permissions or role too high)"
         return None
 
     # ── LOCK ──────────────────────────────────────────────────────────────────
     @app_commands.command(name="lock", description="Lock a channel (nobody can write anymore)")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("lock")
+    @app_commands.rename(canale="channel", motivo="reason")
     async def lock(self, interaction: discord.Interaction,
                    canale: discord.TextChannel = None,
-                   motivo: str = "Nessun motivo specificato"):
+                   motivo: str = "No reason specified"):
         canale = canale or interaction.channel
         overwrite = canale.overwrites_for(interaction.guild.default_role)
         overwrite.send_messages = False
         await canale.set_permissions(interaction.guild.default_role, overwrite=overwrite, reason=motivo)
 
-        embed = discord.Embed(title="🔒 Canale bloccato", color=COLORI.get("ban", 0xE74C3C),
-                              description=f"{canale.mention} è stato bloccato.\n📝 {motivo}")
+        embed = discord.Embed(title="🔒 Channel locked", color=COLORI.get("ban", 0xE74C3C),
+                              description=f"{canale.mention} has been locked.\n📝 {motivo}")
         await interaction.response.send_message(embed=embed)
         await self._lock_log(interaction, canale, "🔒 Channel Locked", "locked", motivo)
 
@@ -642,6 +646,7 @@ class Moderation(commands.Cog):
     @app_commands.command(name="unlock", description="Unlock a previously locked channel")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("lock")
+    @app_commands.rename(canale="channel")
     async def unlock(self, interaction: discord.Interaction,
                      canale: discord.TextChannel = None):
         canale = canale or interaction.channel
@@ -649,8 +654,8 @@ class Moderation(commands.Cog):
         overwrite.send_messages = None
         await canale.set_permissions(interaction.guild.default_role, overwrite=overwrite)
 
-        embed = discord.Embed(title="🔓 Canale sbloccato", color=0x2ECC71,
-                              description=f"{canale.mention} è di nuovo accessibile.")
+        embed = discord.Embed(title="🔓 Channel unlocked", color=0x2ECC71,
+                              description=f"{canale.mention} is accessible again.")
         await interaction.response.send_message(embed=embed)
         await self._lock_log(interaction, canale, "🔓 Channel Unlocked", "unlocked", None)
 
@@ -670,8 +675,9 @@ class Moderation(commands.Cog):
     @app_commands.command(name="jail", description="Jail a user (they only see the jail channel)")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("jail")
+    @app_commands.rename(membro="member", motivo="reason")
     async def jail(self, interaction: discord.Interaction, membro: discord.Member,
-                   motivo: str = "Nessun motivo specificato"):
+                   motivo: str = "No reason specified"):
         config = db.get_log_config(interaction.guild_id)
         jc = config.get("jail", {})
         role = interaction.guild.get_role(jc.get("role")) if jc.get("role") else None
@@ -704,11 +710,11 @@ class Moderation(commands.Cog):
             await interaction.followup.send(_t(interaction, "mod.error", error=e), ephemeral=True)
             return
 
-        embed = discord.Embed(title="🔒 Utente in Jail", color=COLORI.get("ban", 0xE74C3C),
-                              description=f"{membro.mention} è stato messo in jail.\n📋 {motivo}")
+        embed = discord.Embed(title="🔒 User jailed", color=COLORI.get("ban", 0xE74C3C),
+                              description=f"{membro.mention} has been jailed.\n📋 {motivo}")
         await interaction.followup.send(embed=embed)
         try:
-            await channel.send(f"🔒 {membro.mention} sei stato messo in **jail**.\n📋 Motivo: {motivo}")
+            await channel.send(f"🔒 {membro.mention} you have been **jailed**.\n📋 Reason: {motivo}")
         except discord.HTTPException:
             pass
 
@@ -724,6 +730,7 @@ class Moderation(commands.Cog):
     @app_commands.command(name="unjail", description="Unjail a user and restore their roles")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("jail")
+    @app_commands.rename(membro="member")
     async def unjail(self, interaction: discord.Interaction, membro: discord.Member):
         config = db.get_log_config(interaction.guild_id)
         role = interaction.guild.get_role(config.get("jail", {}).get("role"))
@@ -739,14 +746,14 @@ class Moderation(commands.Cog):
         try:
             await membro.remove_roles(role, reason="Unjail")
             if ruoli:
-                await membro.add_roles(*ruoli, reason="Unjail: ripristino ruoli")
+                await membro.add_roles(*ruoli, reason="Unjail: restoring roles")
         except discord.HTTPException as e:
             await interaction.followup.send(_t(interaction, "mod.error", error=e), ephemeral=True)
             return
 
         db.remove_jailed(interaction.guild_id, membro.id)
-        embed = discord.Embed(title="🔓 Utente liberato", color=0x2ECC71,
-                              description=f"{membro.mention} è stato tolto dal jail e i ruoli sono stati ripristinati.")
+        embed = discord.Embed(title="🔓 User released", color=0x2ECC71,
+                              description=f"{membro.mention} has been unjailed and their roles restored.")
         await interaction.followup.send(embed=embed)
 
         log = discord.Embed(title="🔓 Unjail", color=0x2ECC71,
@@ -775,7 +782,7 @@ class Moderation(commands.Cog):
         role = interaction.guild.get_role(config.get("jail", {}).get("role"))
         if not role:
             await interaction.response.send_message(
-                "❌ Il sistema Jail non è configurato.", ephemeral=True)
+                "❌ The Jail system isn't configured.", ephemeral=True)
             return
 
         membri = role.members
@@ -785,7 +792,7 @@ class Moderation(commands.Cog):
 
         righe = [f"🔒 {m.mention} (`{m.id}`)" for m in membri]
         embed = discord.Embed(
-            title=f"🔒 Utenti in Jail ({len(membri)})",
+            title=f"🔒 Jailed users ({len(membri)})",
             description="\n".join(righe[:50]),
             color=COLORI.get("ban", 0xE74C3C),
         )
@@ -801,7 +808,7 @@ class Moderation(commands.Cog):
         role = channel.guild.get_role(jc["role"])
         if role:
             try:
-                await channel.set_permissions(role, view_channel=False, reason="Jail: nuovo canale")
+                await channel.set_permissions(role, view_channel=False, reason="Jail: new channel")
             except discord.HTTPException:
                 pass
 
@@ -843,12 +850,13 @@ class Moderation(commands.Cog):
     @app_commands.command(name="userinfo", description="Show a user's information")
     @app_commands.default_permissions(administrator=True)
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.rename(membro="member")
     async def userinfo(self, interaction: discord.Interaction, membro: discord.Member = None):
         m = membro or interaction.user
 
         badges = [BADGES[f.name] for f in m.public_flags.all() if f.name in BADGES]
-        badge_txt = " ".join(badges) if badges else "Nessuno"
-        colore = str(m.color) if m.color.value else "Nessuno"
+        badge_txt = " ".join(badges) if badges else "None"
+        colore = str(m.color) if m.color.value else "None"
         n_warn = len(db.get_warnings(interaction.guild_id, m.id))
         ruoli = [r.mention for r in reversed(m.roles) if r.name != "@everyone"]
 
@@ -866,7 +874,7 @@ class Moderation(commands.Cog):
                 f"﹥ **Username:** {m.name}\n"
                 f"﹥ **ID:** `{m.id}`\n"
                 f"🎂 **Creation:** {discord.utils.format_dt(m.created_at, 'R')}\n"
-                f"📅 **Join:** {discord.utils.format_dt(m.joined_at, 'R') if m.joined_at else 'sconosciuto'}\n"
+                f"📅 **Join:** {discord.utils.format_dt(m.joined_at, 'R') if m.joined_at else 'unknown'}\n"
                 f"🎨 **Color:** {colore}\n"
                 f"🏅 **Badges:** {badge_txt}"
             ),
@@ -875,15 +883,15 @@ class Moderation(commands.Cog):
 
         info_mod = (
             f"⚠️ **Warn:** {n_warn}\n"
-            f"🤖 **Bot:** {'Sì' if m.bot else 'No'}\n"
-            f"🎭 **Ruolo più alto:** {m.top_role.mention}"
+            f"🤖 **Bot:** {'Yes' if m.bot else 'No'}\n"
+            f"🎭 **Top role:** {m.top_role.mention}"
         )
         if m.is_timed_out():
-            info_mod += f"\n⏱️ **In timeout fino a:** {discord.utils.format_dt(m.timed_out_until, 'R')}"
-        embed.add_field(name="Moderazione:", value=info_mod, inline=False)
+            info_mod += f"\n⏱️ **Timed out until:** {discord.utils.format_dt(m.timed_out_until, 'R')}"
+        embed.add_field(name="Moderation:", value=info_mod, inline=False)
 
         if ruoli:
-            embed.add_field(name=f"Ruoli ({len(ruoli)}):", value=" ".join(ruoli)[:1024], inline=False)
+            embed.add_field(name=f"Roles ({len(ruoli)}):", value=" ".join(ruoli)[:1024], inline=False)
 
         await interaction.response.send_message(embed=embed)
 
@@ -909,11 +917,11 @@ class BanlistView(discord.ui.View):
 
         desc = ""
         for entry in fetta:
-            motivo = entry.reason or "Nessun motivo"
+            motivo = entry.reason or "No reason"
             desc += f"**{entry.user}**\n`{entry.user.id}` • 📋 {motivo}\n\n"
 
         embed = discord.Embed(
-            title=f"🔨 Utenti bannati ({len(self.bans)})",
+            title=f"🔨 Banned users ({len(self.bans)})",
             description=desc,
             color=COLORI["ban"],
         )

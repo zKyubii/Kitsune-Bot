@@ -87,7 +87,7 @@ class PartnerModal(discord.ui.Modal, title="Run a Partner!"):
             except discord.HTTPException:
                 pass
 
-        manager_txt = self.manager.mention if self.manager else "Gestore non specificato"
+        manager_txt = self.manager.mention if self.manager else "Manager not specified"
         info = (
             f"{SEPARATOR}\n"
             f"👤 **Author:** {interaction.user.mention}\n"
@@ -148,7 +148,7 @@ class Partnership(commands.Cog):
                 _t(interaction, "partner.no_role"), ephemeral=True)
         if not config.get("partnership", {}).get("channel"):
             return await interaction.response.send_message(
-                "❌ Il canale delle partnership non è configurato.\n"
+                "❌ The partnerships channel isn't configured.\n"
                 "Vai su `/dashboard` → **Funzioni** → **Partnership**.", ephemeral=True)
         await interaction.response.send_modal(PartnerModal(manager))
 

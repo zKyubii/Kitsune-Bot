@@ -335,9 +335,9 @@ class Logs(commands.Cog):
             nomi = ", ".join(f"[{s.name}]({s.url})" for s in message.stickers)
             rest.append(f"**Stickers:** {nomi}")
         if message.embeds:
-            rest.append(f"**Embed:** {len(message.embeds)} (riportati qui sotto)")
+            rest.append(f"**Embed:** {len(message.embeds)} (shown below)")
         if not message.content and not message.attachments and not message.stickers and not message.embeds:
-            rest.append("*(messaggio senza contenuto recuperabile)*")
+            rest.append("*(message with no recoverable content)*")
         e = _emb(RED, "🗑️ Message Deleted", f"**Author:** {message.author.mention}", rest,
                  user=message.author)
         # Riporta anche gli embed originali del messaggio (preview link, embed dei bot, ecc.)
@@ -378,7 +378,7 @@ class Logs(commands.Cog):
             if m.stickers:
                 extra += "\n" + "\n".join(f"[sticker] {s.name} {s.url}" for s in m.stickers)
             if m.embeds:
-                extra += f"\n[embed] {len(m.embeds)} embed nel messaggio"
+                extra += f"\n[embed] {len(m.embeds)} embed(s) in the message"
             lines.append(f"{author} @ {ts}:\n{content}{extra}\n")
         full_text = "\n".join(lines)
         buf = io.BytesIO(full_text.encode("utf-8"))

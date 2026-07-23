@@ -54,7 +54,7 @@ class AutoReact(commands.Cog):
             if uid not in mentioned:
                 return False
             if rule.get("mode") == "exact":
-                # "solo il tag": il messaggio è SOLO la menzione
+                # "tag only": il messaggio è SOLO la menzione
                 return content in (f"<@{uid}>", f"<@!{uid}>")
             return True
         trig = str(rule.get("trigger", "")).lower().strip()

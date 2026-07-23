@@ -109,7 +109,7 @@ class Antispam(commands.Cog):
                 sanction = cat["sanction"] if cat["sanction"] != "none" else "ban"
                 ok = await self._sanziona(message.guild, message.author, sanction, cat["seconds"],
                                           "Antispam: link/truffa rilevato")
-                await self._segnala(message, "🎣 Scam rilevato", sanction if ok else "nessuna (errore)")
+                await self._segnala(message, "🎣 Scam rilevato", sanction if ok else "none (error)")
                 return
 
         key = (message.guild.id, message.author.id)
@@ -148,7 +148,7 @@ class Antispam(commands.Cog):
                                       "Antispam: " + t(config, logconfig.SPAM_CATEGORIES[categoria]))
 
         await self._segnala(message, "🚨 " + t(config, logconfig.SPAM_CATEGORIES[categoria]),
-                            sanction if ok else "nessuna (errore)", cat.get("seconds", 0))
+                            sanction if ok else "none (error)", cat.get("seconds", 0))
 
     def _rileva(self, key, record):
         dq = self.history[key]

@@ -64,6 +64,7 @@ class Greetings(commands.Cog):
     @app_commands.describe(canale="Channel to send the welcome in", embed="Name of the embed to use",
                            messaggio="Text above the embed (you can tag users/staff and use emoji)")
     @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.rename(canale="channel", messaggio="message")
     async def set_greet(self, interaction: discord.Interaction, canale: discord.TextChannel, embed: str,
                         messaggio: str = None):
         if db.get_embed(interaction.guild_id, embed) is None:
@@ -73,7 +74,7 @@ class Greetings(commands.Cog):
         config = db.get_log_config(interaction.guild_id)
         config["greet"] = {"channel": canale.id, "embed": embed, "message": messaggio}
         db.save_log_config(interaction.guild_id, config)
-        extra = f"\nMessaggio: {messaggio}" if messaggio else ""
+        extra = f"\nMessage: {messaggio}" if messaggio else ""
         await interaction.response.send_message(
             _t(interaction, "greet.welcome_set", channel=canale.mention, name=embed, extra=extra), ephemeral=True)
 
@@ -81,6 +82,7 @@ class Greetings(commands.Cog):
     @app_commands.describe(canale="Channel to send the boost message in", embed="Name of the embed to use",
                            messaggio="Text above the embed (you can tag users/staff and use emoji)")
     @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.rename(canale="channel", messaggio="message")
     async def set_boost(self, interaction: discord.Interaction, canale: discord.TextChannel, embed: str,
                         messaggio: str = None):
         if db.get_embed(interaction.guild_id, embed) is None:
@@ -90,7 +92,7 @@ class Greetings(commands.Cog):
         config = db.get_log_config(interaction.guild_id)
         config["boost"] = {"channel": canale.id, "embed": embed, "message": messaggio}
         db.save_log_config(interaction.guild_id, config)
-        extra = f"\nMessaggio: {messaggio}" if messaggio else ""
+        extra = f"\nMessage: {messaggio}" if messaggio else ""
         await interaction.response.send_message(
             _t(interaction, "greet.boost_set", channel=canale.mention, name=embed, extra=extra), ephemeral=True)
 

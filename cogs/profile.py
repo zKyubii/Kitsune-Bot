@@ -49,7 +49,7 @@ def privacy_notify(target: discord.abc.User) -> bool:
 
 # ── EMBED ───────────────────────────────────────────────────────────────────
 def _bool_label(blocked: bool) -> str:
-    return "🔴 Bloccato" if blocked else "🟢 Visibile"
+    return "🔴 Blocked" if blocked else "🟢 Visible"
 
 
 def _custom_emojis_line(member, guild, config) -> str:
@@ -57,14 +57,14 @@ def _custom_emojis_line(member, guild, config) -> str:
         return _T("prof.non_abilitate")
     r = logconfig.mention_rule_for(config, member.id)
     emojis = r.get("emojis", []) if r else []
-    return " ".join(emojis) if emojis else "Non impostate"
+    return " ".join(emojis) if emojis else "Not set"
 
 
 def build_home_embed(member: discord.Member, guild: discord.Guild,
                      config: dict, prof: dict) -> discord.Embed:
     _CTX["config"] = config          # può essere chiamata anche senza una view
     e = discord.Embed(
-        title=f"🪪 Profilo di {member.display_name}",
+        title=f"🪪 {member.display_name}'s profile",
         description=_T("prof.mini_guida_configurare_tuo_profilo") +
                     _T("prof.usa_menu_tendina_qui_sotto"),
         color=member.color if member.color.value else BLU,
@@ -75,7 +75,7 @@ def build_home_embed(member: discord.Member, guild: discord.Guild,
     prid = logconfig.primary_role_of(config, member.id)
     role = guild.get_role(prid) if prid else None
     e.add_field(name=_T("prof.ruolo_primario"),
-                value=role.mention if role else "Nessuno", inline=False)
+                value=role.mention if role else "None", inline=False)
 
     pv = _privacy(prof)
     e.add_field(
@@ -89,13 +89,13 @@ def build_home_embed(member: discord.Member, guild: discord.Guild,
     # Vocale privata assegnata
     vid = logconfig.private_voice_of(config, member.id)
     ch = guild.get_channel(vid) if vid else None
-    e.add_field(name="🔊 Vocale Privata",
+    e.add_field(name="🔊 Private voice channel",
                 value=ch.mention if ch else _T("prof.nessuna_vocale"), inline=False)
 
-    e.add_field(name="⭐ Custom Reactions",
+    e.add_field(name="⭐ Custom reactions",
                 value=_custom_emojis_line(member, guild, config), inline=False)
 
-    e.set_footer(text="Kitsune • Profilo")
+    e.set_footer(text="Kitsune • Profile")
     return e
 
 
@@ -109,12 +109,12 @@ class SectionSelect(discord.ui.Select):
                                  default=(current == "privacy")),
         ]
         if show_roles:
-            options.append(discord.SelectOption(label="Ruoli", emoji="🎭",
+            options.append(discord.SelectOption(label="Roles", emoji="🎭",
                                                 value="roles", default=(current == "roles")))
         if show_react:
-            options.append(discord.SelectOption(label="Custom Reactions", emoji="⭐",
+            options.append(discord.SelectOption(label="Custom reactions", emoji="⭐",
                                                 value="react", default=(current == "react")))
-        super().__init__(placeholder="Cambia sezione...", options=options, row=0)
+        super().__init__(placeholder="Change section...", options=options, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         v = self.view
@@ -264,7 +264,7 @@ class PrivacyView(_ProfileBase):
                    if notify else _T("prof.nessun_avviso_chi_ci_prova")),
             inline=False,
         )
-        e.set_footer(text="Kitsune • Profilo")
+        e.set_footer(text="Kitsune • Profile")
         return e
 
 
@@ -301,8 +301,8 @@ class ReactServerEmojiSelect(discord.ui.Select):
         options = [discord.SelectOption(label=e.name[:100], value=str(e), emoji=e, default=str(e) in cur)
                    for e in chunk]
         tot = max(1, (len(emojis) + 24) // 25)
-        ph = (f"😀 Emoji dal server (max {maxn}) — pag {page + 1}/{tot}"
-              if tot > 1 else f"😀 Scegli emoji dal server (max {maxn})...")
+        ph = (f"😀 Server emoji (max {maxn}) — page {page + 1}/{tot}"
+              if tot > 1 else f"😀 Pick server emoji (max {maxn})...")
         super().__init__(placeholder=ph, min_values=0, max_values=min(maxn, len(options)) or 1,
                          options=options or [discord.SelectOption(label="—")], row=1)
 
@@ -368,7 +368,7 @@ class ReactManualButton(discord.ui.Button):
 class ReactModeButton(discord.ui.Button):
     def __init__(self, mode):
         is_exact = mode == "exact"
-        super().__init__(label=f"🔁 {'solo il tag' if is_exact else 'ovunque'}",
+        super().__init__(label=f"🔁 {'tag only' if is_exact else 'anywhere'}",
                          style=discord.ButtonStyle.secondary, row=2)
 
     async def callback(self, interaction: discord.Interaction):
@@ -416,12 +416,12 @@ class ReactView(_ProfileBase):
     def build_embed(self):
         config = self._config()
         allowed = logconfig.custom_react_allowed(config, self.member)
-        e = discord.Embed(title="⭐ Custom Reactions",
+        e = discord.Embed(title="⭐ Custom reactions",
                           color=self.member.color if self.member.color.value else BLU)
         if not allowed:
             e.description = (_T("prof.non_sei_abilitato_alle_custom") +
                             _T("prof.permesso_assegna_staff_dalla_dashboard"))
-            e.set_footer(text="Kitsune • Profilo")
+            e.set_footer(text="Kitsune • Profile")
             return e
         r = logconfig.mention_rule_for(config, self.member.id) or {}
         emojis = r.get("emojis", [])
@@ -429,8 +429,8 @@ class ReactView(_ProfileBase):
         modo = (_T("prof.solo_quando_tag_solo") if r.get("mode") == "exact"
                 else _T("prof.anche_se_taggato_dentro_frase"))
         e.description = (
-            f"Il bot reagisce **quando vieni taggato** con le emoji che scegli (max **{maxn}**).\n\n" +
-            f"**Le tue emoji:** {' '.join(emojis) if emojis else 'Nessuna'}\n" +
+            f"The bot reacts **when you get tagged** with the emoji you choose (max **{maxn}**).\n\n" +
+            f"**Your emoji:** {' '.join(emojis) if emojis else 'None'}\n" +
             f"**Modalità:** {modo}"
         )
         e.set_footer(text=_T("prof.emoji_dal_menu_server_oppure"))
@@ -482,7 +482,7 @@ class RoleOptionSelect(discord.ui.Select):
                 scelto = True
             options.append(discord.SelectOption(label=r.name[:100], value=str(r.id), default=on))
         super().__init__(
-            placeholder=f"I tuoi ruoli • {cat.get('name', 'Categoria')}"[:150],
+            placeholder=f"Your roles • {cat.get('name', 'Category')}"[:150],
             min_values=0, max_values=1 if single else len(options),
             options=options, row=2)
 
@@ -552,7 +552,7 @@ class RolesView(_ProfileBase):
                           color=self.member.color if self.member.color.value else BLU)
         if not cats:
             e.description = _T("prof.nessuna_categoria_ruoli_configurata_dallo")
-            e.set_footer(text="Kitsune • Profilo")
+            e.set_footer(text="Kitsune • Profile")
             return e
         cat = cats.get(self.cat_id, {})
         modo = "scelta singola" if cat.get("single") else "scelta multipla"
@@ -562,7 +562,7 @@ class RolesView(_ProfileBase):
         miei = [r.mention for r in roles if r in self.member.roles]
         e.add_field(name=_T("prof.tuoi_ruoli_qui"),
                     value=" ".join(miei) if miei else "*Nessuno*", inline=False)
-        e.set_footer(text="Kitsune • Profilo")
+        e.set_footer(text="Kitsune • Profile")
         return e
 
 

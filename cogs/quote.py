@@ -247,7 +247,7 @@ class GrassettoButton(discord.ui.Button):
 
 class RimuoviButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Rimuovi questa quote", emoji="🗑️", style=discord.ButtonStyle.danger, row=2)
+        super().__init__(label="Remove this quote", emoji="🗑️", style=discord.ButtonStyle.danger, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_message("🗑️ Quote rimossa.", ephemeral=True)
@@ -333,7 +333,7 @@ class Quote(commands.Cog):
             return
         if privacy_blocked(interaction.guild, interaction.user, message.author, "quote"):
             await interaction.response.send_message(
-                f"🔒 {message.author.display_name} ha la privacy attiva sulle quote.",
+                f"🔒 {message.author.display_name} has quote privacy enabled.",
                 ephemeral=True)
             return
 
@@ -368,7 +368,7 @@ class Quote(commands.Cog):
         if privacy_blocked(message.guild, message.author, ref.author, "quote"):
             if privacy_notify(ref.author):
                 await message.channel.send(
-                    f"🔒 {ref.author.display_name} ha la privacy attiva sulle quote.",
+                    f"🔒 {ref.author.display_name} has quote privacy enabled.",
                     delete_after=5)
             return
 
