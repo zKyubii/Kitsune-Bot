@@ -220,6 +220,7 @@ class Moderation(commands.Cog):
     @app_commands.command(name="ban", description="Ban a user from the server")
     @app_commands.default_permissions(ban_members=True)
     @app_commands.checks.has_permissions(ban_members=True)
+    @app_commands.rename(membro="member", motivo="reason", durata="duration")
     async def ban(
         self,
         interaction: discord.Interaction,
@@ -276,6 +277,7 @@ class Moderation(commands.Cog):
     @app_commands.command(name="hackban", description="Ban a user by ID (even if they're not in the server)")
     @app_commands.default_permissions(ban_members=True)
     @app_commands.checks.has_permissions(ban_members=True)
+    @app_commands.rename(utente_id="user_id", motivo="reason")
     async def hackban(
         self,
         interaction: discord.Interaction,
@@ -305,6 +307,7 @@ class Moderation(commands.Cog):
     @app_commands.command(name="unban", description="Unban a user")
     @app_commands.default_permissions(ban_members=True)
     @app_commands.checks.has_permissions(ban_members=True)
+    @app_commands.rename(utente_id="user_id", motivo="reason")
     async def unban(
         self,
         interaction: discord.Interaction,
@@ -333,6 +336,7 @@ class Moderation(commands.Cog):
     @app_commands.command(name="kick", description="Kick a user from the server")
     @app_commands.default_permissions(kick_members=True)
     @app_commands.checks.has_permissions(kick_members=True)
+    @app_commands.rename(membro="member", motivo="reason")
     async def kick(
         self,
         interaction: discord.Interaction,
@@ -359,6 +363,7 @@ class Moderation(commands.Cog):
     @app_commands.command(name="timeout", description="Time a user out")
     @app_commands.default_permissions(moderate_members=True)
     @app_commands.checks.has_permissions(moderate_members=True)
+    @app_commands.rename(membro="member", durata="duration", motivo="reason")
     async def timeout(
         self,
         interaction: discord.Interaction,
@@ -424,6 +429,7 @@ class Moderation(commands.Cog):
         app_commands.Choice(name="3 hours", value=10800),
         app_commands.Choice(name="6 hours", value=21600),
     ])
+    @app_commands.rename(personalizzato="custom")
     async def slowmode(
         self,
         interaction: discord.Interaction,
@@ -448,6 +454,7 @@ class Moderation(commands.Cog):
     @app_commands.command(name="clear", description="Delete messages from the channel with optional filters")
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.checks.has_permissions(manage_messages=True)
+    @app_commands.rename(quantita="amount", utente="user", solo_link="links_only", solo_immagini="images_only", solo_bot="bots_only")
     async def clear(
         self,
         interaction: discord.Interaction,
@@ -500,6 +507,7 @@ class Moderation(commands.Cog):
     @app_commands.command(name="warn", description="Warn a user (with optional reason and proof)")
     @app_commands.default_permissions(moderate_members=True)
     @mod_check("warn")
+    @app_commands.rename(membro="member", motivo="reason")
     async def warn(
         self,
         interaction: discord.Interaction,
