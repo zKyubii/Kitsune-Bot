@@ -120,13 +120,22 @@ class ReasonModal(discord.ui.Modal):
 
 
 # ── VIEW: composizione + anteprima ───────────────────────────────────────────
-class PexRoleSelect(discord.ui.RoleSelect):
-    def __init__(self, config):
+class PexRoleSelect(discord.ui.Select):
+    """Solo i ruoli configurati (Member + ladder), dal più alto al più basso."""
+
+    def __init__(self, guild, cfg, config):
+        ids = list(cfg.get("ladder_roles", []))
+        if cfg.get("member_role") and cfg["member_role"] not in ids:
+            ids.append(cfg["member_role"])
+        ruoli = sorted((r for r in (guild.get_role(i) for i in ids) if r),
+                       key=lambda r: r.position, reverse=True)
+        options = [discord.SelectOption(label=r.name[:100], value=str(r.id)) for r in ruoli]
         super().__init__(placeholder=t(config, "staff.role_ph"),
-                         min_values=1, max_values=1, row=0)
+                         options=options or [discord.SelectOption(label="—", value="_")],
+                         disabled=not options, min_values=1, max_values=1, row=0)
 
     async def callback(self, interaction: discord.Interaction):
-        self.view.target_role = self.values[0]
+        self.view.target_role = interaction.guild.get_role(int(self.values[0]))
         await interaction.response.edit_message(embed=self.view.build_embed(), view=self.view)
 
 
@@ -200,7 +209,7 @@ class PexView(discord.ui.View):
         self.member = member
         self.target_role = None
         self.reason = None
-        self.add_item(PexRoleSelect(config))
+        self.add_item(PexRoleSelect(guild, staff_cfg(config), config))
         self.add_item(PexReasonButton(config))
         self.add_item(PexPublishButton(config))
 
@@ -250,6 +259,10 @@ class Staff(commands.Cog):
             return
         if user.bot:
             await interaction.response.send_message(t(config, "staff.target_bot"), ephemeral=True)
+            return
+        cfg = staff_cfg(config)
+        if not cfg.get("ladder_roles") and not cfg.get("member_role"):
+            await interaction.response.send_message(t(config, "staff.not_configured"), ephemeral=True)
             return
         v = PexView(interaction.user.id, interaction.guild, user, config)
         await interaction.response.send_message(embed=v.build_embed(), view=v, ephemeral=True)

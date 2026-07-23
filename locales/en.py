@@ -64,6 +64,10 @@ STRINGS = {
 
     # ── STAFF (PEX / DEPEX) ─────────────────────────────────────────────────
     "feat.staff": "🛡️ Staff (PEX)",
+    "staff.section_label": "🛡️ Staff (PEX)",
+    "staff.section_desc": "Promote/demote staff with PEX/DEPEX",
+    "staff.not_configured": "❌ The staff system isn't configured yet. Set the ladder roles "
+                            "and the Member role in `/dashboard` → 🛡️ Moderation → 🛡️ Staff.",
     "staff.disabled": "🚫 The staff system is disabled on this server.",
     "staff.no_perm": "❌ You need **Manage Roles** and a role allowed to use PEX.",
     "staff.target_bot": "❌ You can't PEX a bot.",

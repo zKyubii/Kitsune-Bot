@@ -716,6 +716,7 @@ class ModSectionSelect(discord.ui.Select):
             discord.SelectOption(label=_T("dash.regole_warn"), value="warn", description=_T("dash.azioni_automatiche_sui_warn")),
             discord.SelectOption(label=_T("dash.autorole2"), value="autorole", description=_T("dash.ruoli_automatici_all_ingresso")),
             discord.SelectOption(label=_T("dash.permessi2"), value="permessi", description=_T("dash.chi_puo_usare_warn")),
+            discord.SelectOption(label=_T("staff.section_label"), value="staff", description=_T("staff.section_desc")),
             discord.SelectOption(label=_T("dash.dm_lock2"), value="dmlock", description=_T("dash.pausa_dm_server")),
             discord.SelectOption(label=_T("dash.join_lock2"), value="joinlock", description=_T("dash.pausa_inviti_server")),
         ]
@@ -725,7 +726,7 @@ class ModSectionSelect(discord.ui.Select):
         a, g = self.view.author_id, self.view.guild
         mappa = {
             "antispam": AntispamView, "jail": JailView, "warn": WarnActionsView,
-            "autorole": AutoroleView, "permessi": PermissionsView,
+            "autorole": AutoroleView, "permessi": PermissionsView, "staff": StaffView,
             "dmlock": DMLockView, "joinlock": JoinLockView,
         }
         view = mappa[self.values[0]](a, g)
@@ -2159,7 +2160,7 @@ class StaffView(BaseView):
         self.add_item(StaffLadderSelect(cfg.get("ladder_roles", []), config))
         self.add_item(StaffMemberButton(config))
         self.add_item(StaffAutoButton(config))
-        self.add_item(BackButton("features"))
+        self.add_item(BackButton("mod"))
 
     def build_embed(self) -> discord.Embed:
         config = db.get_log_config(self.guild.id)

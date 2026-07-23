@@ -68,7 +68,8 @@ FEATURES = {
     "profile": "feat.profile",
     "counting": "feat.counting",
     "poll": "feat.poll",
-    "staff": "feat.staff",
+    # NB: "staff" (PEX) non è qui di proposito: si configura da Moderazione,
+    # non dalla lista Funzioni. Il feature-flag resta comunque in log_config.
 }
 
 
