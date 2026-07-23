@@ -63,6 +63,9 @@ class BackButton(discord.ui.Button):
         elif self.destination == "rolecats":
             view = RoleCategoriesView(self.view.author_id, self.view.guild)
             embed = view.build_embed()
+        elif self.destination == "staff":
+            view = StaffView(self.view.author_id, self.view.guild)
+            embed = view.build_embed()
         else:
             view = DashboardView(self.view.author_id, self.view.guild)
             embed = build_main_embed(self.view.guild, db.get_log_config(self.view.guild.id))
@@ -2074,7 +2077,245 @@ class PollView(BaseView):
         return embed
 
 
+# ── STAFF (PEX / DEPEX) ───────────────────────────────────────────────────────
+def _staff_cfg(guild_id: int):
+    config = db.get_log_config(guild_id)
+    return config, config.setdefault("staff", {})
+
+
+class StaffChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self, current, config):
+        super().__init__(placeholder=t(config, "staff.channel_ph"),
+                         channel_types=[discord.ChannelType.text],
+                         min_values=0, max_values=1, row=1,
+                         default_values=_dv([current] if current else [],
+                                            discord.SelectDefaultValueType.channel))
+
+    async def callback(self, interaction: discord.Interaction):
+        config, cfg = _staff_cfg(interaction.guild_id)
+        cfg["channel"] = self.values[0].id if self.values else None
+        db.save_log_config(interaction.guild_id, config)
+        v = StaffView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class StaffAllowedSelect(discord.ui.RoleSelect):
+    def __init__(self, ids, config):
+        super().__init__(placeholder=t(config, "staff.roles_ph"),
+                         min_values=0, max_values=15, row=2,
+                         default_values=_dv(ids, discord.SelectDefaultValueType.role))
+
+    async def callback(self, interaction: discord.Interaction):
+        config, cfg = _staff_cfg(interaction.guild_id)
+        cfg["allowed_roles"] = [r.id for r in self.values]
+        db.save_log_config(interaction.guild_id, config)
+        v = StaffView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class StaffLadderSelect(discord.ui.RoleSelect):
+    def __init__(self, ids, config):
+        super().__init__(placeholder=t(config, "staff.ladder_ph"),
+                         min_values=0, max_values=25, row=3,
+                         default_values=_dv(ids, discord.SelectDefaultValueType.role))
+
+    async def callback(self, interaction: discord.Interaction):
+        config, cfg = _staff_cfg(interaction.guild_id)
+        cfg["ladder_roles"] = [r.id for r in self.values]
+        db.save_log_config(interaction.guild_id, config)
+        v = StaffView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class StaffMemberButton(discord.ui.Button):
+    def __init__(self, config):
+        super().__init__(label=t(config, "staff.member_btn"),
+                         style=discord.ButtonStyle.secondary, row=4)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = StaffMemberView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class StaffAutoButton(discord.ui.Button):
+    def __init__(self, config):
+        super().__init__(label=t(config, "staff.auto_btn"),
+                         style=discord.ButtonStyle.secondary, row=4)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = StaffAutoView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class StaffView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        config = db.get_log_config(guild.id)
+        cfg = config.get("staff", {})
+        feats = config.get("features", {})
+        self.add_item(FeatureToggleButton("staff", feats.get("staff", True)))
+        self.add_item(StaffChannelSelect(cfg.get("channel"), config))
+        self.add_item(StaffAllowedSelect(cfg.get("allowed_roles", []), config))
+        self.add_item(StaffLadderSelect(cfg.get("ladder_roles", []), config))
+        self.add_item(StaffMemberButton(config))
+        self.add_item(StaffAutoButton(config))
+        self.add_item(BackButton("features"))
+
+    def build_embed(self) -> discord.Embed:
+        config = db.get_log_config(self.guild.id)
+        cfg = config.get("staff", {})
+        attivo = config.get("features", {}).get("staff", True)
+        ch = self.guild.get_channel(cfg.get("channel")) if cfg.get("channel") else None
+        allowed = cfg.get("allowed_roles", [])
+        member = self.guild.get_role(cfg.get("member_role")) if cfg.get("member_role") else None
+        embed = discord.Embed(title=t(config, "staff.title"),
+                              description=t(config, "staff.desc"), color=BLU)
+        embed.add_field(name=t(config, "common.state"),
+                        value=t(config, "common.enabled" if attivo else "common.disabled"),
+                        inline=False)
+        embed.add_field(name=t(config, "staff.channel_field"),
+                        value=ch.mention if ch else t(config, "staff.channel_none"), inline=False)
+        embed.add_field(name=t(config, "staff.roles_field"),
+                        value=" ".join(f"<@&{r}>" for r in allowed) if allowed
+                        else t(config, "staff.roles_none"), inline=False)
+        ladder = cfg.get("ladder_roles", [])
+        embed.add_field(name=t(config, "staff.ladder_field"),
+                        value=f"{len(ladder)} 🎭" if ladder else t(config, "none"), inline=True)
+        embed.add_field(name=t(config, "staff.member_field"),
+                        value=member.mention if member else t(config, "none"), inline=True)
+        embed.add_field(name=t(config, "staff.auto_list"),
+                        value=str(len(cfg.get("auto_roles", []))), inline=True)
+        return embed
+
+
+class StaffMemberSelect(discord.ui.RoleSelect):
+    def __init__(self, current, config):
+        super().__init__(placeholder=t(config, "staff.member_ph"),
+                         min_values=0, max_values=1, row=0,
+                         default_values=_dv([current] if current else [],
+                                            discord.SelectDefaultValueType.role))
+
+    async def callback(self, interaction: discord.Interaction):
+        config, cfg = _staff_cfg(interaction.guild_id)
+        cfg["member_role"] = self.values[0].id if self.values else None
+        db.save_log_config(interaction.guild_id, config)
+        v = StaffMemberView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class StaffMemberView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        cfg = db.get_log_config(guild.id).get("staff", {})
+        self.add_item(StaffMemberSelect(cfg.get("member_role"), db.get_log_config(guild.id)))
+        self.add_item(BackButton("staff"))
+
+    def build_embed(self) -> discord.Embed:
+        config = db.get_log_config(self.guild.id)
+        cfg = config.get("staff", {})
+        member = self.guild.get_role(cfg.get("member_role")) if cfg.get("member_role") else None
+        embed = discord.Embed(title=t(config, "staff.member_title"),
+                              description=t(config, "staff.member_desc"), color=BLU)
+        embed.add_field(name=t(config, "staff.member_field"),
+                        value=member.mention if member else t(config, "none"), inline=False)
+        return embed
+
+
+class StaffAutoRoleSelect(discord.ui.RoleSelect):
+    def __init__(self):
+        super().__init__(placeholder="1️⃣ Auto-role to give...", min_values=1, max_values=1, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.pending_role = self.values[0].id
+        await interaction.response.edit_message(embed=self.view.build_embed(), view=self.view)
+
+
+class StaffAutoThresholdSelect(discord.ui.RoleSelect):
+    def __init__(self):
+        super().__init__(placeholder="2️⃣ Threshold: given from this rank up...",
+                         min_values=1, max_values=1, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.pending_threshold = self.values[0].id
+        await interaction.response.edit_message(embed=self.view.build_embed(), view=self.view)
+
+
+class StaffAutoAddButton(discord.ui.Button):
+    def __init__(self, config):
+        super().__init__(label=t(config, "staff.auto_add"), emoji="➕",
+                         style=discord.ButtonStyle.success, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        v = self.view
+        if not v.pending_role or not v.pending_threshold:
+            await interaction.response.send_message(
+                t(db.get_log_config(interaction.guild_id), "staff.auto_need_both"), ephemeral=True)
+            return
+        config, cfg = _staff_cfg(interaction.guild_id)
+        autos = cfg.setdefault("auto_roles", [])
+        autos[:] = [a for a in autos if a.get("role") != v.pending_role]   # niente doppioni
+        autos.append({"role": v.pending_role, "threshold": v.pending_threshold})
+        db.save_log_config(interaction.guild_id, config)
+        nv = StaffAutoView(v.author_id, v.guild)
+        await interaction.response.edit_message(embed=nv.build_embed(), view=nv)
+
+
+class StaffAutoRemoveSelect(discord.ui.Select):
+    def __init__(self, autos, guild, config):
+        options = []
+        for a in autos[:25]:
+            role = guild.get_role(a.get("role"))
+            options.append(discord.SelectOption(
+                label=(role.name if role else str(a.get("role")))[:100], value=str(a.get("role"))))
+        super().__init__(placeholder=t(config, "staff.auto_remove_ph"), row=3,
+                         options=options or [discord.SelectOption(label="—", value="_")],
+                         disabled=not options)
+
+    async def callback(self, interaction: discord.Interaction):
+        config, cfg = _staff_cfg(interaction.guild_id)
+        cfg["auto_roles"] = [a for a in cfg.get("auto_roles", [])
+                             if str(a.get("role")) != self.values[0]]
+        db.save_log_config(interaction.guild_id, config)
+        v = StaffAutoView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class StaffAutoView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        self.pending_role = None
+        self.pending_threshold = None
+        config = db.get_log_config(guild.id)
+        autos = config.get("staff", {}).get("auto_roles", [])
+        self.add_item(StaffAutoRoleSelect())
+        self.add_item(StaffAutoThresholdSelect())
+        self.add_item(StaffAutoAddButton(config))
+        self.add_item(StaffAutoRemoveSelect(autos, guild, config))
+        self.add_item(BackButton("staff"))
+
+    def build_embed(self) -> discord.Embed:
+        config = db.get_log_config(self.guild.id)
+        autos = config.get("staff", {}).get("auto_roles", [])
+        embed = discord.Embed(title=t(config, "staff.auto_title"),
+                              description=t(config, "staff.auto_desc"), color=BLU)
+        if autos:
+            righe = []
+            for a in autos:
+                role = self.guild.get_role(a.get("role"))
+                thr = self.guild.get_role(a.get("threshold"))
+                righe.append(t(config, "staff.auto_entry",
+                               role=role.mention if role else "?",
+                               threshold=thr.mention if thr else "?"))
+            valore = "\n".join(righe)
+        else:
+            valore = t(config, "staff.auto_none")
+        embed.add_field(name=t(config, "staff.auto_list"), value=valore, inline=False)
+        return embed
+
+
 def _feature_view(key: str, author_id: int, guild: discord.Guild):
+    if key == "staff":
+        return StaffView(author_id, guild)
     if key == "poll":
         return PollView(author_id, guild)
     if key == "counting":

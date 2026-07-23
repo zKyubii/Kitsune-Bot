@@ -62,6 +62,65 @@ STRINGS = {
     "poll.no_role": "❌ You don't have a role allowed to create polls.",
     "feat.poll": "📊 Poll",
 
+    # ── STAFF (PEX / DEPEX) ─────────────────────────────────────────────────
+    "feat.staff": "🛡️ Staff (PEX)",
+    "staff.disabled": "🚫 The staff system is disabled on this server.",
+    "staff.no_perm": "❌ You need **Manage Roles** and a role allowed to use PEX.",
+    "staff.target_bot": "❌ You can't PEX a bot.",
+    "staff.only_author": "❌ Only whoever started it can use this.",
+    "staff.role_ph": "🎭 New role...",
+    "staff.reason_btn": "Reason",
+    "staff.reason_title": "PEX reason",
+    "staff.reason_label": "Reason",
+    "staff.reason_ph": "e.g. Transfer, promotion for merit...",
+    "staff.reason_missing": "*(reason missing)*",
+    "staff.publish": "Publish",
+    "staff.pick_role": "Pick the new role, write the reason, then Publish.",
+    "staff.need_all": "❌ Pick a role and write the reason first.",
+    "staff.no_change": "❌ Nothing to change: the member already has that rank.",
+    "staff.bot_too_low": "❌ My role is too low to manage {role}: move it higher.",
+    "staff.forbidden": "❌ I don't have permission to change those roles.",
+    "staff.send_error": "❌ Error while publishing: {error}",
+    "staff.done": "✅ Published in {channel}!",
+    "staff.preview_title": "🛡️ PEX preview",
+    "staff.preview_footer": "The role change is applied on Publish.",
+    "staff.channel_current": "*this channel*",
+    # dashboard
+    "staff.title": "🛡️ Staff (PEX / DEPEX)",
+    "staff.desc": "`/pex` promotes or demotes a member: it detects the direction "
+                  "automatically from the role hierarchy, applies the roles and posts "
+                  "a message.\nManage who can use it, the channel, the role ladder and "
+                  "the auto-roles here.",
+    "staff.channel_ph": "📢 Channel where PEX messages are posted...",
+    "staff.channel_field": "📢 Channel",
+    "staff.channel_none": "*None — the channel where the command is used*",
+    "staff.roles_ph": "🎭 Roles allowed to PEX (need Manage Roles too)...",
+    "staff.roles_field": "🎭 Allowed roles",
+    "staff.roles_none": "*None — administrators only*",
+    "staff.ladder_ph": "🪜 Staff ladder roles (the ranks)...",
+    "staff.ladder_field": "🪜 Ladder roles",
+    "staff.member_btn": "👤 Member role",
+    "staff.member_title": "👤 Member role",
+    "staff.member_desc": "The base non-staff role. Shown as the starting point when someone "
+                         "enters staff, and applied when someone is demoted out of staff.",
+    "staff.member_ph": "👤 Member role...",
+    "staff.member_field": "👤 Member role",
+    "staff.auto_btn": "⭐ Auto-roles",
+    "staff.auto_title": "⭐ Auto-roles",
+    "staff.auto_desc": "Roles the bot adds/removes automatically based on the reached rank. "
+                       "Each auto-role has a **threshold**: it's given when the new rank is at "
+                       "or above that role, removed below. Add as many as you want "
+                       "(Staff, High Staff, Ultra Staff...). They don't show in the message.",
+    "staff.auto_role_ph": "1️⃣ Auto-role to give...",
+    "staff.auto_threshold_ph": "2️⃣ Threshold: given from this rank up...",
+    "staff.auto_add": "Add",
+    "staff.auto_remove_ph": "🗑️ Remove an auto-role...",
+    "staff.auto_need_both": "❌ Pick both the role and the threshold first.",
+    "staff.auto_list": "Auto-roles",
+    "staff.auto_entry": "{role} — from {threshold} up",
+    "staff.auto_none": "*None set*",
+    "none": "None",
+
     # ── HELP ────────────────────────────────────────────────────────────────
     "help.comandi_kitsune": "📖 Kitsune commands",
     "help.intro": "Here's the list of available commands.\n"

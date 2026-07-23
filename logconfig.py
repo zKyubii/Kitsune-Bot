@@ -68,6 +68,7 @@ FEATURES = {
     "profile": "feat.profile",
     "counting": "feat.counting",
     "poll": "feat.poll",
+    "staff": "feat.staff",
 }
 
 
