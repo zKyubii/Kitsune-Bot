@@ -7,7 +7,7 @@ import database as db
 import levelsystem as ls
 from logconfig import (LOG_CATEGORIES, FEATURES, SPAM_CATEGORIES, SANCTIONS, categoria_cfg,
                        ensure_mention_rule, custom_react_allowed, remove_profile_mention_rule)
-from locales import t, lang_of, LANG_NAMES
+from locales import t
 
 BLU = 0x5865F2
 
@@ -299,29 +299,10 @@ class BaseView(discord.ui.View):
         return True
 
 
-class LanguageSelect(discord.ui.Select):
-    """Lingua del bot su questo server (i testi cambiano solo qui)."""
-
-    def __init__(self, config):
-        attuale = lang_of(config)
-        options = [discord.SelectOption(label=nome, value=code, default=(code == attuale))
-                   for code, nome in LANG_NAMES.items()]
-        super().__init__(placeholder=t(config, "lang.placeholder"), options=options, row=1)
-
-    async def callback(self, interaction: discord.Interaction):
-        config = db.get_log_config(interaction.guild_id)
-        config["lang"] = self.values[0]
-        db.save_log_config(interaction.guild_id, config)
-        v = DashboardView(self.view.author_id, self.view.guild)
-        await interaction.response.edit_message(
-            embed=build_main_embed(self.view.guild, config), view=v)
-
-
 class DashboardView(BaseView):
     def __init__(self, author_id: int, guild: discord.Guild):
         super().__init__(author_id, guild)
         self.add_item(HomeSelect())
-        self.add_item(LanguageSelect(db.get_log_config(guild.id)))
 
 
 class OpenLogBlacklistButton(discord.ui.Button):
@@ -1999,7 +1980,84 @@ class CountingView(BaseView):
         return embed
 
 
+class PollChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self, current, config):
+        super().__init__(placeholder=t(config, "poll.channel_ph"),
+                         channel_types=[discord.ChannelType.text],
+                         min_values=0, max_values=1, row=2,
+                         default_values=_dv([current] if current else [],
+                                            discord.SelectDefaultValueType.channel))
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("poll", {})["channel"] = self.values[0].id if self.values else None
+        db.save_log_config(interaction.guild_id, config)
+        v = PollView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class PollResetButton(discord.ui.Button):
+    def __init__(self, config):
+        super().__init__(label=t(config, "poll.btn_reset"), emoji="🔄",
+                         style=discord.ButtonStyle.danger, row=3)
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("poll", {})["counter"] = 0
+        db.save_log_config(interaction.guild_id, config)
+        v = PollView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class PollRolesSelect(discord.ui.RoleSelect):
+    def __init__(self, ids, config):
+        super().__init__(placeholder=t(config, "poll.roles_ph"),
+                         min_values=0, max_values=15, row=1,
+                         default_values=_dv(ids, discord.SelectDefaultValueType.role))
+
+    async def callback(self, interaction: discord.Interaction):
+        config = db.get_log_config(interaction.guild_id)
+        config.setdefault("poll", {})["allowed_roles"] = [r.id for r in self.values]
+        db.save_log_config(interaction.guild_id, config)
+        v = PollView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class PollView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        config = db.get_log_config(guild.id)
+        feats = config.get("features", {})
+        poll = config.get("poll", {})
+        self.add_item(FeatureToggleButton("poll", feats.get("poll", True)))
+        self.add_item(PollRolesSelect(poll.get("allowed_roles", []), config))
+        self.add_item(PollChannelSelect(poll.get("channel"), config))
+        self.add_item(PollResetButton(config))
+        self.add_item(BackButton("features"))
+
+    def build_embed(self) -> discord.Embed:
+        config = db.get_log_config(self.guild.id)
+        attivo = config.get("features", {}).get("poll", True)
+        poll = config.get("poll", {})
+        prossimo = poll.get("counter", 0) + 1
+        ruoli = poll.get("allowed_roles", [])
+        chi = " ".join(f"<@&{r}>" for r in ruoli) if ruoli else t(config, "poll.roles_none")
+        embed = discord.Embed(title=t(config, "poll.title"),
+                              description=t(config, "poll.desc"), color=BLU)
+        embed.add_field(name=t(config, "common.state"),
+                        value=t(config, "common.enabled" if attivo else "common.disabled"),
+                        inline=False)
+        embed.add_field(name=t(config, "poll.roles_field"), value=chi, inline=False)
+        ch = self.guild.get_channel(poll.get("channel")) if poll.get("channel") else None
+        embed.add_field(name=t(config, "poll.channel_field"),
+                        value=ch.mention if ch else t(config, "poll.channel_none"), inline=False)
+        embed.add_field(name=t(config, "poll.counter"), value=f"**{prossimo}**", inline=False)
+        return embed
+
+
 def _feature_view(key: str, author_id: int, guild: discord.Guild):
+    if key == "poll":
+        return PollView(author_id, guild)
     if key == "counting":
         return CountingView(author_id, guild)
     if key == "quote":

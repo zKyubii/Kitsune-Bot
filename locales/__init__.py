@@ -1,47 +1,27 @@
-"""Sistema di traduzione (i18n).
+"""Testi dell'interfaccia.
 
-La lingua è un'impostazione PER-SERVER salvata in `log_config["lang"]`, quindi
-lo stesso bot parla italiano su un server e inglese su un altro.
+Il bot è in inglese. Le stringhe stanno tutte in `en.py` invece che sparse nei
+cog, così sono in un posto solo e facili da rileggere/correggere.
 
 Uso:
     from locales import t
     await ctx.send(t(config, "counting.ruined", user=..., n=22))
 
-Se una chiave non è ancora tradotta nella lingua richiesta si ripiega sulle
-altre: una migrazione a metà non rompe mai un messaggio.
+`config` non serve più a scegliere la lingua (ce n'è una sola): resta nella
+firma perché lo passano già tutte le chiamate, e perché se un giorno servisse
+una seconda lingua basta rimetterla qui senza toccare i cog.
 """
-from . import it, en
+from . import en
 
-# Lingua usata quando un server non ne ha scelta una.
-# Inglese: è anche quella su cui ripiegano le chiavi non ancora tradotte.
-DEFAULT_LANG = "en"
-
-LANGS = {"it": it.STRINGS, "en": en.STRINGS}
-LANG_NAMES = {"it": "🇮🇹 Italiano", "en": "🇬🇧 English"}
-
-
-def lang_of(config: dict) -> str:
-    return (config or {}).get("lang", DEFAULT_LANG)
+STRINGS = en.STRINGS
 
 
 def t(config, key: str, **kwargs) -> str:
-    """Testo localizzato.
-
-    `config` è il log_config del server (oppure direttamente il codice lingua).
-    """
-    lingua = config if isinstance(config, str) else lang_of(config)
-
-    testo = LANGS.get(lingua, {}).get(key)
-    if testo is None:                                   # non tradotta: default
-        testo = LANGS[DEFAULT_LANG].get(key)
-    if testo is None:                                   # né lì: qualsiasi lingua
-        for altra in LANGS.values():
-            if key in altra:
-                testo = altra[key]
-                break
-    if testo is None:                                   # chiave inesistente
+    """Testo dell'interfaccia. Se la chiave non esiste la restituisce com'è,
+    così è ovvio cosa manca invece di stampare vuoto."""
+    testo = STRINGS.get(key)
+    if testo is None:
         return key
-
     try:
         return testo.format(**kwargs)
     except (KeyError, IndexError, ValueError):
@@ -54,6 +34,4 @@ def tlist(config, key: str) -> list:
     Serve quando il testo contiene segnaposto da riempire dopo la scelta
     casuale (come `{a}` e `{b}` nelle frasi di /ship).
     """
-    lingua = config if isinstance(config, str) else lang_of(config)
-    testo = LANGS.get(lingua, {}).get(key) or LANGS[DEFAULT_LANG].get(key, "")
-    return [r for r in testo.split("\n") if r]
+    return [r for r in STRINGS.get(key, "").split("\n") if r]

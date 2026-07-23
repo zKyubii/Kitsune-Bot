@@ -67,6 +67,7 @@ FEATURES = {
     "autoreact": "feat.autoreact",
     "profile": "feat.profile",
     "counting": "feat.counting",
+    "poll": "feat.poll",
 }
 
 
