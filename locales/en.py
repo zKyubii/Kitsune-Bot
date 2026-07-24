@@ -82,6 +82,7 @@ STRINGS = {
 
     # ── STAFF (PEX / DEPEX) ─────────────────────────────────────────────────
     "feat.staff": "🛡️ Staff (PEX)",
+    "feat.tickets": "🎫 Tickets",
     "staff.section_label": "🛡️ Staff (PEX)",
     "staff.section_desc": "Promote/demote staff with PEX/DEPEX",
     "staff.not_configured": "❌ The staff system isn't configured yet. Set the ladder roles "

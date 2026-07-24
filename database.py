@@ -97,6 +97,19 @@ def init_db():
             reason    TEXT,
             PRIMARY KEY (guild_id, user_id)
         );
+
+        CREATE TABLE IF NOT EXISTS tickets (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id     INTEGER,
+            channel_id   INTEGER,
+            panel_key    TEXT,
+            opener_id    INTEGER,
+            claimer_id   INTEGER,
+            number       INTEGER,
+            created_at   TEXT,
+            closed_at    TEXT,
+            status       TEXT DEFAULT 'open'
+        );
     """)
     conn.commit()
 
@@ -425,3 +438,57 @@ def get_expired_temp_bans() -> list:
     return conn.execute(
         "SELECT * FROM temp_bans WHERE unban_at <= ?", (adesso,)
     ).fetchall()
+
+
+# ── TICKETS ─────────────────────────────────────────────────────────────────
+def create_ticket(guild_id: int, channel_id: int, panel_key: str,
+                  opener_id: int, number: int) -> int:
+    cur = conn.execute(
+        """
+        INSERT INTO tickets (guild_id, channel_id, panel_key, opener_id, number, created_at, status)
+        VALUES (?, ?, ?, ?, ?, ?, 'open')
+        """,
+        (guild_id, channel_id, panel_key, opener_id, number,
+         datetime.datetime.now(datetime.timezone.utc).isoformat()),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_ticket_by_channel(channel_id: int):
+    return conn.execute(
+        "SELECT * FROM tickets WHERE channel_id = ? AND status = 'open'", (channel_id,)
+    ).fetchone()
+
+
+def set_ticket_claimer(channel_id: int, claimer_id):
+    conn.execute("UPDATE tickets SET claimer_id = ? WHERE channel_id = ?",
+                 (claimer_id, channel_id))
+    conn.commit()
+
+
+def close_ticket(channel_id: int):
+    conn.execute(
+        "UPDATE tickets SET status = 'closed', closed_at = ? WHERE channel_id = ?",
+        (datetime.datetime.now(datetime.timezone.utc).isoformat(), channel_id),
+    )
+    conn.commit()
+
+
+def count_open_tickets(guild_id: int, user_id: int = None) -> int:
+    if user_id is None:
+        row = conn.execute(
+            "SELECT COUNT(*) c FROM tickets WHERE guild_id = ? AND status = 'open'",
+            (guild_id,)).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT COUNT(*) c FROM tickets WHERE guild_id = ? AND opener_id = ? AND status = 'open'",
+            (guild_id, user_id)).fetchone()
+    return row["c"] if row else 0
+
+
+def open_ticket_channels(guild_id: int) -> list:
+    """Id dei canali dei ticket aperti (per pulizia all'avvio)."""
+    return [r["channel_id"] for r in conn.execute(
+        "SELECT channel_id FROM tickets WHERE guild_id = ? AND status = 'open'", (guild_id,)
+    ).fetchall()]

@@ -66,6 +66,15 @@ class BackButton(discord.ui.Button):
         elif self.destination == "staff":
             view = StaffView(self.view.author_id, self.view.guild)
             embed = view.build_embed()
+        elif self.destination == "tickets":
+            view = TicketsDashView(self.view.author_id, self.view.guild)
+            embed = view.build_embed()
+        elif self.destination == "tkpanels":
+            view = TicketPanelsView(self.view.author_id, self.view.guild)
+            embed = view.build_embed()
+        elif self.destination == "tkmulti":
+            view = TicketMultiListView(self.view.author_id, self.view.guild)
+            embed = view.build_embed()
         else:
             view = DashboardView(self.view.author_id, self.view.guild)
             embed = build_main_embed(self.view.guild, db.get_log_config(self.view.guild.id))
@@ -2329,7 +2338,555 @@ class StaffAutoView(BaseView):
         return embed
 
 
+# ── TICKETS ───────────────────────────────────────────────────────────────────
+import cogs.tickets as tk
+
+
+def _tk_cfg(guild_id: int):
+    config = db.get_log_config(guild_id)
+    return config, config.setdefault("tickets", {})
+
+
+class TicketSectionSelect(discord.ui.Select):
+    def __init__(self):
+        super().__init__(placeholder="Configure...", row=1, options=[
+            discord.SelectOption(label="⚙️ General settings", value="general",
+                                 description="Log, category, naming, limits, blacklist"),
+            discord.SelectOption(label="🗂️ Categories (panels)", value="panels",
+                                 description="The single ticket types (High Staff, Perks...)"),
+            discord.SelectOption(label="📋 Panel messages", value="multi",
+                                 description="The published messages with the menu/buttons"),
+        ])
+
+    async def callback(self, interaction: discord.Interaction):
+        a, g = self.view.author_id, self.view.guild
+        v = {"general": TicketGeneralView, "panels": TicketPanelsView,
+             "multi": TicketMultiListView}[self.values[0]](a, g)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TicketsDashView(BaseView):
+    def __init__(self, author_id: int, guild: discord.Guild):
+        super().__init__(author_id, guild)
+        feats = db.get_log_config(guild.id).get("features", {})
+        self.add_item(FeatureToggleButton("tickets", feats.get("tickets", True)))
+        self.add_item(TicketSectionSelect())
+        self.add_item(BackButton("features"))
+
+    def build_embed(self) -> discord.Embed:
+        config = db.get_log_config(self.guild.id)
+        cfg = config.get("tickets", {})
+        attivo = config.get("features", {}).get("tickets", True)
+        embed = discord.Embed(
+            title="🎫 Tickets",
+            description="Support ticket system: create categories, publish a panel with a "
+                        "menu or buttons, and let members open private channels.",
+            color=BLU)
+        embed.add_field(name="Status", value="🟢 Enabled" if attivo else "🔴 Disabled", inline=True)
+        embed.add_field(name="Categories", value=str(len(cfg.get("panels", {}))), inline=True)
+        embed.add_field(name="Panels", value=str(len(cfg.get("multipanels", {}))), inline=True)
+        embed.add_field(name="Open now", value=str(db.count_open_tickets(self.guild.id)), inline=True)
+        return embed
+
+
+# ── GENERALE ──────────────────────────────────────────────────────────────────
+class TkLogSelect(discord.ui.ChannelSelect):
+    def __init__(self, current):
+        super().__init__(placeholder="📢 Log channel...", channel_types=[discord.ChannelType.text],
+                         min_values=0, max_values=1, row=0,
+                         default_values=_dv([current] if current else [], discord.SelectDefaultValueType.channel))
+
+    async def callback(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        cfg["log_channel"] = self.values[0].id if self.values else None
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketGeneralView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkCategorySelect(discord.ui.ChannelSelect):
+    def __init__(self, current):
+        super().__init__(placeholder="📁 Category for ticket channels...",
+                         channel_types=[discord.ChannelType.category],
+                         min_values=0, max_values=1, row=1,
+                         default_values=_dv([current] if current else [], discord.SelectDefaultValueType.channel))
+
+    async def callback(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        cfg["category"] = self.values[0].id if self.values else None
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketGeneralView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkBlacklistSelect(discord.ui.RoleSelect):
+    def __init__(self, ids):
+        super().__init__(placeholder="🚫 Roles that can't open tickets...",
+                         min_values=0, max_values=15, row=2,
+                         default_values=_dv(ids, discord.SelectDefaultValueType.role))
+
+    async def callback(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        cfg["blacklist_roles"] = [r.id for r in self.values]
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketGeneralView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkToggle(discord.ui.Button):
+    """Interruttore generico su una chiave booleana di tickets."""
+    def __init__(self, key, label_on, label_off, value, default, row):
+        self.key, self.default = key, default
+        super().__init__(label=label_on if value else label_off,
+                         style=discord.ButtonStyle.success if value else discord.ButtonStyle.secondary, row=row)
+
+    async def callback(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        cfg[self.key] = not cfg.get(self.key, self.default)
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketGeneralView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkLimitsModal(discord.ui.Modal, title="Ticket limits"):
+    def __init__(self, cfg):
+        super().__init__()
+        self.per_user = discord.ui.TextInput(label="Max open per user (0 = unlimited)",
+                                             default=str(cfg.get("max_per_user", 0)), max_length=4)
+        self.total = discord.ui.TextInput(label="Max open on the server (0 = unlimited)",
+                                          default=str(cfg.get("max_total", 0)), max_length=5)
+        self.add_item(self.per_user)
+        self.add_item(self.total)
+
+    async def on_submit(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        cfg["max_per_user"] = int(self.per_user.value) if self.per_user.value.isdigit() else 0
+        cfg["max_total"] = int(self.total.value) if self.total.value.isdigit() else 0
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketGeneralView(interaction.user.id, interaction.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkLimitsButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Limits", emoji="🔢", style=discord.ButtonStyle.secondary, row=4)
+
+    async def callback(self, interaction):
+        cfg = db.get_log_config(interaction.guild_id).get("tickets", {})
+        await interaction.response.send_modal(TkLimitsModal(cfg))
+
+
+class TkResetButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Reset counter", emoji="🔄", style=discord.ButtonStyle.danger, row=4)
+
+    async def callback(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        cfg["counter"] = 0
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketGeneralView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkNamingButton(discord.ui.Button):
+    def __init__(self, naming):
+        self.numbered = naming != "username"
+        super().__init__(label="Naming: ticket-1" if self.numbered else "Naming: ticket-name",
+                         style=discord.ButtonStyle.secondary, row=3)
+
+    async def callback(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        cfg["naming"] = "username" if cfg.get("naming", "number") == "number" else "number"
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketGeneralView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TicketGeneralView(BaseView):
+    def __init__(self, author_id, guild):
+        super().__init__(author_id, guild)
+        cfg = db.get_log_config(guild.id).get("tickets", {})
+        self.add_item(TkLogSelect(cfg.get("log_channel")))
+        self.add_item(TkCategorySelect(cfg.get("category")))
+        self.add_item(TkBlacklistSelect(cfg.get("blacklist_roles", [])))
+        self.add_item(TkNamingButton(cfg.get("naming", "number")))
+        self.add_item(TkToggle("close_reason", "Ask reason: on", "Ask reason: off",
+                               cfg.get("close_reason", False), False, 3))
+        self.add_item(TkToggle("opener_can_close", "Opener can close: yes", "Opener can close: no",
+                               cfg.get("opener_can_close", True), True, 3))
+        self.add_item(TkLimitsButton())
+        self.add_item(TkResetButton())
+        self.add_item(BackButton("tickets"))
+
+    def build_embed(self):
+        cfg = db.get_log_config(self.guild.id).get("tickets", {})
+        log = self.guild.get_channel(cfg.get("log_channel")) if cfg.get("log_channel") else None
+        cat = self.guild.get_channel(cfg.get("category")) if cfg.get("category") else None
+        bl = cfg.get("blacklist_roles", [])
+        naming = "ticket-1, ticket-2…" if cfg.get("naming", "number") == "number" else "ticket-username"
+        e = discord.Embed(title="⚙️ Tickets — general", color=BLU)
+        e.add_field(name="📢 Log channel", value=log.mention if log else "❌ not set", inline=True)
+        e.add_field(name="📁 Category", value=cat.mention if cat else "❌ not set", inline=True)
+        e.add_field(name="Naming", value=naming, inline=True)
+        e.add_field(name="🔢 Limits", value=f"{cfg.get('max_per_user',0) or '∞'}/user · "
+                                            f"{cfg.get('max_total',0) or '∞'} total", inline=True)
+        e.add_field(name="Next number", value=str(cfg.get("counter", 0) + 1), inline=True)
+        e.add_field(name="🚫 Blacklist", value=" ".join(f"<@&{r}>" for r in bl) if bl else "None", inline=False)
+        return e
+
+
+# ── CATEGORIE (panels) ────────────────────────────────────────────────────────
+class TkNewPanelModal(discord.ui.Modal, title="New category"):
+    def __init__(self):
+        super().__init__()
+        self.name = discord.ui.TextInput(label="Name (button/menu label)", max_length=80,
+                                         placeholder="e.g. High Staff / Perks")
+        self.add_item(self.name)
+
+    async def on_submit(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        p = cfg.setdefault("panels", {})
+        key = tk.new_key(cfg, "panel_seq", "p")
+        p[key] = {"name": self.name.value.strip(), "ping_opener": True}
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketPanelEditView(interaction.user.id, interaction.guild, key)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkNewPanelButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="New category", emoji="➕", style=discord.ButtonStyle.success, row=0)
+
+    async def callback(self, interaction):
+        await interaction.response.send_modal(TkNewPanelModal())
+
+
+class TkPanelEditSelect(discord.ui.Select):
+    def __init__(self, panels):
+        options = [discord.SelectOption(label=p.get("name", k)[:100], value=k,
+                                        emoji=tk._emoji(p.get("emoji")))
+                   for k, p in list(panels.items())[:25]]
+        super().__init__(placeholder="✏️ Edit a category...", row=1,
+                         options=options or [discord.SelectOption(label="—", value="_")],
+                         disabled=not options)
+
+    async def callback(self, interaction):
+        v = TicketPanelEditView(self.view.author_id, self.view.guild, self.values[0])
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TicketPanelsView(BaseView):
+    def __init__(self, author_id, guild):
+        super().__init__(author_id, guild)
+        p = db.get_log_config(guild.id).get("tickets", {}).get("panels", {})
+        self.add_item(TkNewPanelButton())
+        self.add_item(TkPanelEditSelect(p))
+        self.add_item(BackButton("tickets"))
+
+    def build_embed(self):
+        p = db.get_log_config(self.guild.id).get("tickets", {}).get("panels", {})
+        e = discord.Embed(title="🗂️ Ticket categories",
+                          description="The single ticket types. Create them here, then add them "
+                                      "to a published panel.", color=BLU)
+        righe = [f"{v.get('emoji','')} **{v.get('name', k)}**" for k, v in p.items()]
+        e.add_field(name="Categories", value="\n".join(righe) if righe else "*None yet*", inline=False)
+        return e
+
+
+class TkPanelTextsModal(discord.ui.Modal, title="Category texts"):
+    def __init__(self, guild_id, key):
+        super().__init__()
+        self.key = key
+        p = db.get_log_config(guild_id).get("tickets", {}).get("panels", {}).get(key, {})
+        self.name = discord.ui.TextInput(label="Name", default=p.get("name", ""), max_length=80)
+        self.emoji = discord.ui.TextInput(label="Emoji (optional)", required=False,
+                                          default=p.get("emoji", ""), max_length=60)
+        self.desc = discord.ui.TextInput(label="Menu description (optional)", required=False,
+                                         default=p.get("description", ""), max_length=100)
+        self.otitle = discord.ui.TextInput(label="Open embed title", required=False,
+                                           default=p.get("open_title", "Ticket Opened"), max_length=100)
+        self.obody = discord.ui.TextInput(label="Open embed body ({user}, {panel})", required=False,
+                                          style=discord.TextStyle.paragraph, max_length=500,
+                                          default=p.get("open_body", "{user} opened a new ticket {panel}."))
+        for c in (self.name, self.emoji, self.desc, self.otitle, self.obody):
+            self.add_item(c)
+
+    async def on_submit(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        p = cfg.setdefault("panels", {}).setdefault(self.key, {})
+        p.update(name=self.name.value.strip(), emoji=self.emoji.value.strip() or None,
+                 description=self.desc.value.strip() or None,
+                 open_title=self.otitle.value.strip() or "Ticket Opened",
+                 open_body=self.obody.value.strip() or "{user} opened a new ticket.")
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketPanelEditView(interaction.user.id, interaction.guild, self.key)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkPanelTextsButton(discord.ui.Button):
+    def __init__(self, key):
+        super().__init__(label="Texts & emoji", emoji="✏️", style=discord.ButtonStyle.secondary, row=2)
+        self.key = key
+
+    async def callback(self, interaction):
+        await interaction.response.send_modal(TkPanelTextsModal(interaction.guild_id, self.key))
+
+
+class TkPanelPingSelect(discord.ui.RoleSelect):
+    def __init__(self, key, ids):
+        self.key = key
+        super().__init__(placeholder="🔔 Roles to ping / give access...",
+                         min_values=0, max_values=10, row=0,
+                         default_values=_dv(ids, discord.SelectDefaultValueType.role))
+
+    async def callback(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        cfg["panels"][self.key]["ping_roles"] = [r.id for r in self.values]
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketPanelEditView(self.view.author_id, self.view.guild, self.key)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkPanelCatSelect(discord.ui.ChannelSelect):
+    def __init__(self, key, current):
+        self.key = key
+        super().__init__(placeholder="📁 Category override (optional)...",
+                         channel_types=[discord.ChannelType.category],
+                         min_values=0, max_values=1, row=1,
+                         default_values=_dv([current] if current else [], discord.SelectDefaultValueType.channel))
+
+    async def callback(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        cfg["panels"][self.key]["category"] = self.values[0].id if self.values else None
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketPanelEditView(self.view.author_id, self.view.guild, self.key)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkPanelPingOpenerButton(discord.ui.Button):
+    def __init__(self, key, value):
+        self.key = key
+        super().__init__(label="Ping opener: yes" if value else "Ping opener: no",
+                         style=discord.ButtonStyle.success if value else discord.ButtonStyle.secondary, row=2)
+
+    async def callback(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        p = cfg["panels"][self.key]
+        p["ping_opener"] = not p.get("ping_opener", True)
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketPanelEditView(self.view.author_id, self.view.guild, self.key)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkPanelDeleteButton(discord.ui.Button):
+    def __init__(self, key):
+        self.key = key
+        super().__init__(label="Delete category", emoji="🗑️", style=discord.ButtonStyle.danger, row=2)
+
+    async def callback(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        cfg.get("panels", {}).pop(self.key, None)
+        for mp in cfg.get("multipanels", {}).values():
+            if self.key in mp.get("panels", []):
+                mp["panels"].remove(self.key)
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketPanelsView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TicketPanelEditView(BaseView):
+    def __init__(self, author_id, guild, key):
+        super().__init__(author_id, guild)
+        self.key = key
+        p = db.get_log_config(guild.id).get("tickets", {}).get("panels", {}).get(key, {})
+        self.add_item(TkPanelPingSelect(key, p.get("ping_roles", [])))
+        self.add_item(TkPanelCatSelect(key, p.get("category")))
+        self.add_item(TkPanelTextsButton(key))
+        self.add_item(TkPanelPingOpenerButton(key, p.get("ping_opener", True)))
+        self.add_item(TkPanelDeleteButton(key))
+        self.add_item(BackButton("tkpanels"))
+
+    def build_embed(self):
+        p = db.get_log_config(self.guild.id).get("tickets", {}).get("panels", {}).get(self.key, {})
+        cat = self.guild.get_channel(p.get("category")) if p.get("category") else None
+        ping = p.get("ping_roles", [])
+        e = discord.Embed(title=f"✏️ {p.get('emoji','')} {p.get('name','Category')}", color=BLU)
+        e.add_field(name="Menu description", value=p.get("description") or "*none*", inline=False)
+        e.add_field(name="Open title", value=p.get("open_title", "Ticket Opened"), inline=False)
+        e.add_field(name="Open body", value=p.get("open_body", "{user} opened a new ticket."), inline=False)
+        e.add_field(name="🔔 Ping roles", value=" ".join(f"<@&{r}>" for r in ping) if ping else "None", inline=False)
+        e.add_field(name="📁 Category override", value=cat.mention if cat else "*default*", inline=True)
+        e.add_field(name="Ping opener", value="yes" if p.get("ping_opener", True) else "no", inline=True)
+        return e
+
+
+# ── MULTIPANEL (messaggi pubblicati) ──────────────────────────────────────────
+class TkNewMultiButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="New panel", emoji="➕", style=discord.ButtonStyle.success, row=0)
+
+    async def callback(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        mps = cfg.setdefault("multipanels", {})
+        key = tk.new_key(cfg, "multipanel_seq", "mp")
+        mps[key] = {"style": "select", "panels": []}
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketMultiEditView(interaction.user.id, interaction.guild, key)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkMultiEditSelect(discord.ui.Select):
+    def __init__(self, mps):
+        options = [discord.SelectOption(label=f"Panel {k}", value=k) for k in list(mps)[:25]]
+        super().__init__(placeholder="✏️ Edit a panel...", row=1,
+                         options=options or [discord.SelectOption(label="—", value="_")],
+                         disabled=not options)
+
+    async def callback(self, interaction):
+        v = TicketMultiEditView(self.view.author_id, self.view.guild, self.values[0])
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TicketMultiListView(BaseView):
+    def __init__(self, author_id, guild):
+        super().__init__(author_id, guild)
+        mps = db.get_log_config(guild.id).get("tickets", {}).get("multipanels", {})
+        self.add_item(TkNewMultiButton())
+        self.add_item(TkMultiEditSelect(mps))
+        self.add_item(BackButton("tickets"))
+
+    def build_embed(self):
+        e = discord.Embed(title="📋 Ticket panels",
+                          description="The messages published in a channel, with a menu or buttons "
+                                      "to open tickets. Each one groups the categories you choose.",
+                          color=BLU)
+        return e
+
+
+class TkMultiEmbedSelect(discord.ui.Select):
+    def __init__(self, key, guild, current):
+        self.key = key
+        names = db.list_embeds(guild.id)[:25]
+        options = [discord.SelectOption(label=n[:100], value=n, default=(n == current)) for n in names]
+        super().__init__(placeholder="🖼️ Intro embed (from /embed create)...", row=0,
+                         options=options or [discord.SelectOption(label="— create one with /embed —", value="_")],
+                         disabled=not options)
+
+    async def callback(self, interaction):
+        if self.values[0] == "_":
+            return await interaction.response.defer()
+        config, cfg = _tk_cfg(interaction.guild_id)
+        cfg["multipanels"][self.key]["embed"] = self.values[0]
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketMultiEditView(self.view.author_id, self.view.guild, self.key)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkMultiPanelsSelect(discord.ui.Select):
+    def __init__(self, key, guild, chosen):
+        self.key = key
+        p = db.get_log_config(guild.id).get("tickets", {}).get("panels", {})
+        options = [discord.SelectOption(label=v.get("name", k)[:100], value=k,
+                                        emoji=tk._emoji(v.get("emoji")), default=(k in chosen))
+                   for k, v in list(p.items())[:25]]
+        super().__init__(placeholder="🗂️ Categories shown in this panel...", row=1,
+                         min_values=0, max_values=len(options) or 1,
+                         options=options or [discord.SelectOption(label="— create a category first —", value="_")],
+                         disabled=not options)
+
+    async def callback(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        cfg["multipanels"][self.key]["panels"] = [v for v in self.values if v != "_"]
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketMultiEditView(self.view.author_id, self.view.guild, self.key)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkMultiChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self, key):
+        self.key = key
+        super().__init__(placeholder="📢 Channel to publish in...",
+                         channel_types=[discord.ChannelType.text], min_values=1, max_values=1, row=2)
+
+    async def callback(self, interaction):
+        self.view.publish_channel = self.values[0].id
+        await interaction.response.edit_message(embed=self.view.build_embed(), view=self.view)
+
+
+class TkMultiStyleButton(discord.ui.Button):
+    def __init__(self, key, style):
+        self.key = key
+        super().__init__(label="Style: dropdown" if style != "buttons" else "Style: buttons",
+                         emoji="🔽" if style != "buttons" else "🔘",
+                         style=discord.ButtonStyle.secondary, row=3)
+
+    async def callback(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        mp = cfg["multipanels"][self.key]
+        mp["style"] = "buttons" if mp.get("style", "select") == "select" else "select"
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketMultiEditView(self.view.author_id, self.view.guild, self.key)
+        v.publish_channel = getattr(self.view, "publish_channel", None)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TkMultiPublishButton(discord.ui.Button):
+    def __init__(self, key):
+        self.key = key
+        super().__init__(label="Publish", emoji="✅", style=discord.ButtonStyle.success, row=3)
+
+    async def callback(self, interaction):
+        ch_id = getattr(self.view, "publish_channel", None)
+        canale = interaction.guild.get_channel(ch_id) if ch_id else None
+        if canale is None:
+            return await interaction.response.send_message("❌ Pick a channel first.", ephemeral=True)
+        config = db.get_log_config(interaction.guild_id)
+        msg = await tk.publish_multipanel(interaction.guild, config, self.key, canale)
+        await interaction.response.send_message(msg, ephemeral=True)
+
+
+class TkMultiDeleteButton(discord.ui.Button):
+    def __init__(self, key):
+        self.key = key
+        super().__init__(label="Delete", emoji="🗑️", style=discord.ButtonStyle.danger, row=4)
+
+    async def callback(self, interaction):
+        config, cfg = _tk_cfg(interaction.guild_id)
+        cfg.get("multipanels", {}).pop(self.key, None)
+        db.save_log_config(interaction.guild_id, config)
+        v = TicketMultiListView(self.view.author_id, self.view.guild)
+        await interaction.response.edit_message(embed=v.build_embed(), view=v)
+
+
+class TicketMultiEditView(BaseView):
+    def __init__(self, author_id, guild, key):
+        super().__init__(author_id, guild)
+        self.key = key
+        self.publish_channel = None
+        mp = db.get_log_config(guild.id).get("tickets", {}).get("multipanels", {}).get(key, {})
+        self.add_item(TkMultiEmbedSelect(key, guild, mp.get("embed")))
+        self.add_item(TkMultiPanelsSelect(key, guild, mp.get("panels", [])))
+        self.add_item(TkMultiChannelSelect(key))
+        self.add_item(TkMultiStyleButton(key, mp.get("style", "select")))
+        self.add_item(TkMultiPublishButton(key))
+        self.add_item(TkMultiDeleteButton(key))
+        self.add_item(BackButton("tkmulti"))
+
+    def build_embed(self):
+        mp = db.get_log_config(self.guild.id).get("tickets", {}).get("multipanels", {}).get(self.key, {})
+        p = db.get_log_config(self.guild.id).get("tickets", {}).get("panels", {})
+        chosen = [p.get(k, {}).get("name", k) for k in mp.get("panels", [])]
+        e = discord.Embed(title="✏️ Ticket panel", color=BLU,
+                          description="Pick the intro embed, the categories and the style, then Publish.")
+        e.add_field(name="🖼️ Intro embed", value=f"`{mp['embed']}`" if mp.get("embed") else "*none — /embed create*", inline=False)
+        e.add_field(name="🗂️ Categories", value=", ".join(chosen) if chosen else "*none*", inline=False)
+        e.add_field(name="Style", value="dropdown" if mp.get("style", "select") != "buttons" else "buttons", inline=True)
+        return e
+
+
 def _feature_view(key: str, author_id: int, guild: discord.Guild):
+    if key == "tickets":
+        return TicketsDashView(author_id, guild)
     if key == "staff":
         return StaffView(author_id, guild)
     if key == "poll":
